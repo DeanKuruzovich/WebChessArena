@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3 uid="uid://d1uxgwntjosnc"]
+
+[ext_resource type="Script" uid="uid://cfwyr55f7v2ne" path="res://ScreenEdgePulse.gd" id="1_811ig"]
+[ext_resource type="Shader" uid="uid://dx5owmcltlhmk" path="res://ScreenEdgeLights.gdshader" id="2_811ig"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_eqhdy"]
+shader = ExtResource("2_811ig")
+shader_parameter/edge_intensityINP = 2.0
+shader_parameter/dropFactor = 2.0
+shader_parameter/cornerIntensityINP = 1.6
+shader_parameter/MaxColor = 0.85
+shader_parameter/ColorTint = Vector3(1, 0.8, 0)
+shader_parameter/timeOffset = 0.0
+
+[node name="CanvasLayer" type="CanvasLayer"]
+script = ExtResource("1_811ig")
+
+[node name="Timer" type="Timer" parent="."]
+wait_time = 6.0
+one_shot = true
+autostart = true
+
+[node name="ColorRect2" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_eqhdy")
+anchors_preset = -1
+anchor_left = -2.20694
+anchor_top = -0.847656
+anchor_right = -2.20694
+anchor_bottom = -0.847656
+offset_left = 1486.0
+offset_top = 947.0
+offset_right = 2418.0
+offset_bottom = 2589.0
+metadata/_edit_use_anchors_ = true
+
+[connection signal="timeout" from="Timer" to="." method="_on_timer_timeout"]

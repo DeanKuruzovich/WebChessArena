@@ -1,0 +1,227 @@
+[gd_scene load_steps=10 format=3 uid="uid://uy17r50175id"]
+
+[ext_resource type="Material" uid="uid://chmwyde8ea3gu" path="res://MoveHighlight.tres" id="1_fos0i"]
+[ext_resource type="Texture2D" uid="uid://c4st55xrrdisd" path="res://Chess kit (Community).png" id="2"]
+[ext_resource type="Script" uid="uid://c05s6lks73wlt" path="res://Main.gd" id="3"]
+[ext_resource type="FontFile" uid="uid://4lcwvxejgqpc" path="res://times.ttf" id="4_font"]
+[ext_resource type="Texture2D" uid="uid://bsr5v5gisnip6" path="res://PieceTextures/black_bishop.png" id="5_fos0i"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_hud"]
+font = ExtResource("4_font")
+font_size = 44
+font_color = Color(0.12, 0.12, 0.12, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_hover"]
+content_margin_left = 24.0
+content_margin_top = 12.0
+content_margin_right = 24.0
+content_margin_bottom = 12.0
+bg_color = Color(0.3, 0.3, 0.3, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn"]
+content_margin_left = 24.0
+content_margin_top = 12.0
+content_margin_right = 24.0
+content_margin_bottom = 12.0
+bg_color = Color(0.18, 0.18, 0.18, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="LabelSettings" id="LabelSettings_title"]
+font = ExtResource("4_font")
+font_size = 72
+font_color = Color(0.1, 0.1, 0.1, 1)
+
+[node name="Board" type="Sprite2D"]
+y_sort_enabled = true
+material = ExtResource("1_fos0i")
+position = Vector2(-2, 3)
+texture = ExtResource("2")
+script = ExtResource("3")
+
+[node name="BoardOrigin" type="Node2D" parent="."]
+position = Vector2(-1119, -1118)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(0.286, 0.286)
+
+[node name="Move Cooldown" type="Timer" parent="."]
+wait_time = 0.5
+one_shot = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="TopMargin" type="MarginContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 220.0
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 28
+
+[node name="HBox" type="HBoxContainer" parent="HUD/TopMargin"]
+layout_mode = 2
+
+[node name="Labels" type="VBoxContainer" parent="HUD/TopMargin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="MoveLabel" type="Label" parent="HUD/TopMargin/HBox/Labels"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Move: 0"
+label_settings = SubResource("LabelSettings_hud")
+
+[node name="Score" type="Label" parent="HUD/TopMargin/HBox/Labels"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Score: 0"
+label_settings = SubResource("LabelSettings_hud")
+
+[node name="HighScore" type="Label" parent="HUD/TopMargin/HBox/Labels"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "High Score: 0"
+label_settings = SubResource("LabelSettings_hud")
+
+[node name="MenuBtn" type="Button" parent="HUD/TopMargin/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 36
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/normal = SubResource("StyleBox_btn")
+text = "☰"
+
+[node name="GameOverLayer" type="CanvasLayer" parent="."]
+layer = 20
+visible = false
+
+[node name="GameOver" type="Control" parent="GameOverLayer"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BG" type="ColorRect" parent="GameOverLayer/GameOver"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Center" type="CenterContainer" parent="GameOverLayer/GameOver"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="VBoxContainer" parent="GameOverLayer/GameOver/Center"]
+layout_mode = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="Title" type="Label" parent="GameOverLayer/GameOver/Center/Panel"]
+layout_mode = 2
+text = "Game Over"
+label_settings = SubResource("LabelSettings_title")
+horizontal_alignment = 1
+
+[node name="RestartBtn" type="Button" parent="GameOverLayer/GameOver/Center/Panel"]
+custom_minimum_size = Vector2(240, 64)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 32
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/normal = SubResource("StyleBox_btn")
+text = "Restart"
+
+[node name="MenuLayer" type="CanvasLayer" parent="."]
+layer = 20
+visible = false
+
+[node name="MenuPanel" type="Control" parent="MenuLayer"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BG" type="ColorRect" parent="MenuLayer/MenuPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Center" type="CenterContainer" parent="MenuLayer/MenuPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="VBoxContainer" parent="MenuLayer/MenuPanel/Center"]
+layout_mode = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="Title" type="Label" parent="MenuLayer/MenuPanel/Center/Panel"]
+layout_mode = 2
+text = "Settings"
+label_settings = SubResource("LabelSettings_title")
+horizontal_alignment = 1
+
+[node name="RestartBtn" type="Button" parent="MenuLayer/MenuPanel/Center/Panel"]
+custom_minimum_size = Vector2(240, 64)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 32
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/normal = SubResource("StyleBox_btn")
+text = "Restart"
+
+[node name="CloseBtn" type="Button" parent="MenuLayer/MenuPanel/Center/Panel"]
+custom_minimum_size = Vector2(240, 64)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 32
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/normal = SubResource("StyleBox_btn")
+text = "Close"
+
+[node name="BlackBishop" type="Sprite2D" parent="."]
+position = Vector2(-6698, -569)
+texture = ExtResource("5_fos0i")
+
+[connection signal="timeout" from="Move Cooldown" to="." method="_on_Timer_timeout"]
+[connection signal="pressed" from="HUD/TopMargin/HBox/MenuBtn" to="." method="_on_menu_pressed"]
+[connection signal="pressed" from="GameOverLayer/GameOver/Center/Panel/RestartBtn" to="." method="_on_reset_pressed"]
+[connection signal="pressed" from="MenuLayer/MenuPanel/Center/Panel/RestartBtn" to="." method="_on_reset_pressed"]
+[connection signal="pressed" from="MenuLayer/MenuPanel/Center/Panel/CloseBtn" to="." method="_on_close_menu_pressed"]

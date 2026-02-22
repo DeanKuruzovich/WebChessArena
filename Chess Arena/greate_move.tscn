@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3 uid="uid://3m07mwj5buac"]
+
+[ext_resource type="Shader" uid="uid://c27a8oqjqgetx" path="res://GreateMoveBuldge.gdshader" id="1_vw8k8"]
+[ext_resource type="Texture2D" uid="uid://dqqhhcqly4wrb" path="res://GreateMove.png" id="1_xbslf"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_2cd2v"]
+shader = ExtResource("1_vw8k8")
+shader_parameter/hit_effect = 0.9
+shader_parameter/shake_intensity = 10.0
+
+[node name="GreateMove" type="Sprite2D"]
+material = SubResource("ShaderMaterial_2cd2v")
+scale = Vector2(2, 2)
+texture = ExtResource("1_xbslf")

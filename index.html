@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Chess Arena</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hud-left">
+      <span id="moveLabel">Moves: 0</span>
+      <span id="scoreLabel">Score: 0</span>
+      <span id="highScoreLabel">High: 0</span>
+    </div>
+    <button id="menuBtn" title="Settings">☰</button>
+  </div>
+
+  <!-- Chess board canvas -->
+  <canvas id="board"></canvas>
+
+  <!-- Great Move / Good Move banner -->
+  <div id="banner" class="banner"></div>
+
+  <!-- Game Over panel -->
+  <div id="gameOverPanel" class="overlay hidden">
+    <div class="panel">
+      <h2>Game Over</h2>
+      <div class="panel-scores">
+        <span id="goScore">Score: 0</span>
+        <span id="goHighScore">High Score: 0</span>
+      </div>
+      <button id="restartFromGameOver" class="btn btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Settings / Pause panel -->
+  <div id="settingsPanel" class="overlay hidden">
+    <div class="panel">
+      <h2>Settings</h2>
+      <p style="margin-bottom:28px;font-size:0.95rem;color:#a0a0c8;">
+        Capture white pieces for points.<br/>
+        Drag your black pieces to move.
+      </p>
+      <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
+      <button id="closeMenuBtn" class="btn btn-secondary">Resume</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Load order matters: engine → game → main -->
+<script src="js/engine.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>

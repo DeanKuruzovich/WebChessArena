@@ -1,0 +1,77 @@
+[gd_scene load_steps=8 format=3 uid="uid://dlgpcgtu78exe"]
+
+[ext_resource type="Script" uid="uid://b5jdjb4cba1wq" path="res://Menu.gd" id="1_5yleq"]
+[ext_resource type="Texture2D" uid="uid://c4st55xrrdisd" path="res://Chess kit (Community).png" id="1_uubjt"]
+[ext_resource type="Shader" uid="uid://yxbexvnnsfp2" path="res://BoardShader.gdshader" id="2_ylpcl"]
+[ext_resource type="FontFile" uid="uid://4lcwvxejgqpc" path="res://times.ttf" id="4_cx167"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cx167"]
+shader = ExtResource("2_ylpcl")
+shader_parameter/moves = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+[sub_resource type="LabelSettings" id="LabelSettings_dolsu"]
+font = ExtResource("4_cx167")
+font_size = 280
+outline_size = 8
+outline_color = Color(0, 0, 0, 1)
+
+[sub_resource type="Theme" id="Theme_cx167"]
+default_font = ExtResource("4_cx167")
+default_font_size = 128
+
+[node name="Menu" type="Node2D"]
+script = ExtResource("1_5yleq")
+
+[node name="Board" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_cx167")
+position = Vector2(-0.999999, 58)
+scale = Vector2(1.07324, 1.05839)
+texture = ExtResource("1_uubjt")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(0.286, 0.286)
+
+[node name="Title" type="Label" parent="."]
+offset_left = -697.0
+offset_top = -518.0
+offset_right = 711.0
+offset_bottom = -207.0
+label_settings = SubResource("LabelSettings_dolsu")
+
+[node name="TitleAppear" type="Timer" parent="."]
+wait_time = 3.0
+one_shot = true
+autostart = true
+
+[node name="normalModeAppear" type="Timer" parent="."]
+wait_time = 4.0
+one_shot = true
+autostart = true
+
+[node name="otherModeAppear" type="Timer" parent="."]
+wait_time = 4.3
+one_shot = true
+autostart = true
+
+[node name="EndlessMode" type="Button" parent="."]
+visible = false
+offset_left = -362.0
+offset_top = -277.0
+offset_right = 375.0
+offset_bottom = 57.0
+theme = SubResource("Theme_cx167")
+text = "Endless Mode"
+
+[node name="OtherMode" type="Button" parent="."]
+visible = false
+offset_left = -368.0
+offset_top = 120.0
+offset_right = 369.0
+offset_bottom = 454.0
+theme = SubResource("Theme_cx167")
+text = "Other Mode"
+
+[connection signal="timeout" from="TitleAppear" to="." method="_on_timer_timeout"]
+[connection signal="timeout" from="normalModeAppear" to="." method="_on_normal_mode_appear_timeout"]
+[connection signal="timeout" from="otherModeAppear" to="." method="_on_other_mode_appear_timeout"]
+[connection signal="pressed" from="EndlessMode" to="." method="_on_endless_mode_pressed"]

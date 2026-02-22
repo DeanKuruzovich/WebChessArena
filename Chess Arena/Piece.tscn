@@ -1,0 +1,40 @@
+[gd_scene load_steps=5 format=3 uid="uid://c0nmfo4ejes50"]
+
+[ext_resource type="Texture2D" uid="uid://j8y2rgsrmvn2" path="res://PieceTextures/white_pawn.png" id="1"]
+[ext_resource type="Script" uid="uid://ce4c7uqodhxpw" path="res://Piece.gd" id="2"]
+
+[sub_resource type="Shader" id="1"]
+code = "shader_type canvas_item;
+
+uniform float fadeIn : hint_range(0.0, 1.0); // 0.0 (invisible) -> 1.0 (fully visible)
+
+void fragment() {
+    vec4 tex_color = texture(TEXTURE, UV);
+    tex_color.a *= fadeIn; // Adjust alpha based on turn progression
+    COLOR = tex_color;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="2"]
+resource_local_to_scene = true
+shader = SubResource("1")
+shader_parameter/fadeIn = 0.0
+
+[node name="Node2D" type="Node2D"]
+y_sort_enabled = true
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchor_right = 0.396
+offset_left = -144.0
+offset_top = -136.0
+offset_right = 145.0
+offset_bottom = 137.0
+script = ExtResource("2")
+
+[node name="Piece" type="Sprite2D" parent="."]
+z_index = 1
+z_as_relative = false
+y_sort_enabled = true
+material = SubResource("2")
+texture = ExtResource("1")
