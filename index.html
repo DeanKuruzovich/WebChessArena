@@ -10,21 +10,24 @@
 
 <div id="app">
 
-  <!-- HUD -->
-  <div id="hud">
-    <div id="hud-left">
-      <span id="moveLabel">Moves: 0</span>
-      <span id="scoreLabel">Score: 0</span>
-      <span id="highScoreLabel">High: 0</span>
-    </div>
-    <button id="menuBtn" title="Settings">☰</button>
-  </div>
-
   <!-- Chess board canvas -->
   <canvas id="board"></canvas>
 
-  <!-- Great Move / Good Move banner -->
-  <div id="banner" class="banner"></div>
+  <!-- HUD -->
+  <div id="hud">
+    <div class="score-block" id="score-block">
+      <div class="score-title">SCORE</div>
+      <div id="scoreLabel">0</div>
+    </div>
+    <div class="score-block score-block-best" id="high-block">
+      <div class="score-title">BEST</div>
+      <div id="highScoreLabel">0</div>
+    </div>
+    <div id="hud-right">
+      <span id="moveLabel">Moves: 0</span>
+      <button id="menuBtn" title="Settings">☰</button>
+    </div>
+  </div>
 
   <!-- Game Over panel -->
   <div id="gameOverPanel" class="overlay hidden">
@@ -42,12 +45,42 @@
   <div id="settingsPanel" class="overlay hidden">
     <div class="panel">
       <h2>Settings</h2>
-      <p style="margin-bottom:28px;font-size:0.95rem;color:#a0a0c8;">
+      <p style="margin-bottom:18px;font-size:0.95rem;color:#cccccc;">
         Capture white pieces for points.<br/>
         Drag your black pieces to move.
       </p>
-      <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
-      <button id="closeMenuBtn" class="btn btn-secondary">Resume</button>
+
+      <!-- Piece Colour Toggle -->
+      <p class="color-picker-label">Play as</p>
+      <div class="color-swatches">
+        <button class="swatch active" data-row="1" title="Black pieces">
+          <span class="swatch-label">Black</span>
+        </button>
+        <button class="swatch" data-row="0" title="White pieces">
+          <span class="swatch-label">White</span>
+        </button>
+      </div>
+
+      <div style="margin-top:18px;">
+        <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
+        <button id="creditsBtn" class="btn btn-secondary">Credits</button><br/>
+        <button id="closeMenuBtn" class="btn btn-secondary">Resume</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credits panel -->
+  <div id="creditsPanel" class="overlay hidden">
+    <div class="panel">
+      <h2>Credits</h2>
+      <div class="credits-content">
+        <p style="font-weight:bold;margin-bottom:6px;">Chess Piece Graphics</p>
+        <p style="font-size:0.88rem;color:#cccccc;margin-bottom:8px;">By jurgenwesterhof<br/>(adapted from work of Cburnett)</p>
+        <a href="http://commons.wikimedia.org/wiki/Template:SVG_chess_pieces" target="_blank" class="credits-link">commons.wikimedia.org</a>
+        <p style="font-size:0.82rem;color:#cccccc;margin-top:10px;">Licence: CC BY-SA 3.0</p>
+        <a href="https://commons.wikimedia.org/w/index.php?curid=35634436" target="_blank" class="credits-link" style="font-size:0.78rem;">wikimedia curid=35634436</a>
+      </div>
+      <button id="closeCreditsBtn" class="btn btn-primary" style="margin-top:22px;">Close</button>
     </div>
   </div>
 

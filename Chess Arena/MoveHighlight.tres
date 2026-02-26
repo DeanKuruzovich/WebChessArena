@@ -1,7 +1,0 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://chmwyde8ea3gu"]
-
-[ext_resource type="Shader" uid="uid://yxbexvnnsfp2" path="res://BoardShader.gdshader" id="1_sacfc"]
-
-[resource]
-shader = ExtResource("1_sacfc")
-shader_parameter/moves = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)

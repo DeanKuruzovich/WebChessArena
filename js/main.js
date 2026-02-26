@@ -1,6 +1,6 @@
 'use strict';
 // =============================================================================
-// main.js — Canvas renderer, drag-and-drop input, UI, visual effects
+// main.js — Canvas renderer, drag-and-drop input, UI, Block Blast VFX
 // =============================================================================
 
 (async () => {
@@ -11,11 +11,9 @@
   const canvas  = document.getElementById('board');
   const ctx     = canvas.getContext('2d');
   const DPR = Math.min(window.devicePixelRatio || 1, 3);
-  const CANVAS_LOGICAL = 560; // logical coordinate space (never changes)
-  // Buffer is DPR× the logical size → 1:1 native pixels on retina screens
+  const CANVAS_LOGICAL = 560;
   canvas.width  = Math.round(CANVAS_LOGICAL * DPR);
   canvas.height = Math.round(CANVAS_LOGICAL * DPR);
-  // Scale all draw calls so coordinates stay in the logical 560× space
   ctx.scale(DPR, DPR);
 
   // ---------------------------------------------------------------------------
@@ -30,33 +28,52 @@
     });
   }
 
-  // Board image
-  const boardImg = await loadImage('Chess Arena/Chess kit (Community).png');
+  const boardImg   = await loadImage('Assets/Chess kit (Community).png');
+  const spriteImg   = await loadImage('Assets/Chess_Pieces_Sprite.svg');
+  const sparkleImg  = await loadImage('Assets/Sparkle.png');
 
-  // Piece images (UPPERCASE = black/player, lowercase = white/AI)
-  const PIECE_IMG_MAP = {
-    'P': 'black_pawn',   'Q': 'black_queen',  'K': 'black_king',
-    'R': 'black_rook',   'N': 'black_knight', 'B': 'black_bishop',
-    'p': 'white_pawn',   'q': 'white_queen',  'k': 'white_king',
-    'r': 'white_rook',   'n': 'white_knight', 'b': 'white_bishop',
-  };
+  // Audio
+  function loadAudio(src) {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    return a;
+  }
+  const sndCapture = loadAudio('Assets/sounds/capture.mp3');
+  const sndMove    = loadAudio('Assets/sounds/move-self.mp3');
+  function playSound(snd) {
+    try { const s = snd.cloneNode(); s.volume = 0.65; s.play().catch(()=>{}); } catch(e) {}
+  }
 
-  const pieceImgs = {};
-  await Promise.all(
-    Object.entries(PIECE_IMG_MAP).map(async ([key, name]) => {
-      pieceImgs[key] = await loadImage(`Chess Arena/PieceTextures/${name}.png`);
-    })
-  );
+  // Sprite sheet: 270×90, 6 cols × 2 rows, each cell 45×45
+  // Sprite row 0 = white-looking pieces, row 1 = black-looking pieces
+  // Column order: K=0  Q=1  B=2  N=3  R=4  P=5
+  const SPRITE_CELL = 45;
+  const SPRITE_COLS = { k:0, q:1, b:2, n:3, r:4, p:5,
+                        K:0, Q:1, B:2, N:3, R:4, P:5 };
+  // playerPieceRow: 1 = player pieces look black (default), 0 = player pieces look white
+  let playerPieceRow = 1;
 
-  const sparkleImg = await loadImage('Chess Arena/Sparkle.png');
+  function getSpriteRow(type) {
+    // UPPERCASE = player pieces, lowercase = AI pieces
+    return (type === type.toUpperCase()) ? playerPieceRow : (1 - playerPieceRow);
+  }
+
+  function drawPieceSprite(type, dx, dy, dw, dh) {
+    if (!spriteImg) return;
+    const col = SPRITE_COLS[type];
+    if (col === undefined) return;
+    const sx = col * SPRITE_CELL;
+    const sy = getSpriteRow(type) * SPRITE_CELL;
+    ctx.drawImage(spriteImg, sx, sy, SPRITE_CELL, SPRITE_CELL, dx, dy, dw, dh);
+  }
 
   // ---------------------------------------------------------------------------
   // Board geometry (matches original: 43px margin, 280px/square in a 2321px image)
   // ---------------------------------------------------------------------------
   const MARGIN_FRAC  = 43  / 2321;
   const SQUARE_FRAC  = 280 / 2321;
-  const MARGIN       = CANVAS_LOGICAL * MARGIN_FRAC;   // ≈ 10.4 px
-  const SQUARE       = CANVAS_LOGICAL * SQUARE_FRAC;   // ≈ 67.5 px
+  const MARGIN       = CANVAS_LOGICAL * MARGIN_FRAC;
+  const SQUARE       = CANVAS_LOGICAL * SQUARE_FRAC;
 
   function boardToCanvas(col, row) {
     return [MARGIN + col * SQUARE + SQUARE / 2,
@@ -71,8 +88,9 @@
   // ---------------------------------------------------------------------------
   // Drag state
   // ---------------------------------------------------------------------------
-  let dragging = null;          // { piece, startX, startY, curX, curY }
-  let highlighted = [];         // [[col, row], ...]
+  let dragging  = null;
+  let highlighted = [];
+  let shiftHeld   = false;
 
   // ---------------------------------------------------------------------------
   // Animation timing
@@ -81,45 +99,495 @@
   let   lastTs   = 0;
 
   // ---------------------------------------------------------------------------
-  // Visual effects state
+  // Score count-up display
   // ---------------------------------------------------------------------------
-  let effects = [];  // { type, t, maxT, data }
+  let displayScore = 0;
+  let targetScore  = 0;
+  const scoreEl    = document.getElementById('scoreLabel');
+  const highEl     = document.getElementById('highScoreLabel');
+  const moveEl     = document.getElementById('moveLabel');
 
-  function addEffect(type, maxT, data = {}) {
-    effects.push({ type, t: 0, maxT, data });
+  function updateScoreDisplay(dtSec) {
+    if (displayScore === targetScore) return;
+    // Count up at a speed proportional to the gap (min 4 pts/sec), max 8× per sec
+    const gap  = targetScore - displayScore;
+    const step = Math.max(1, Math.abs(gap) * Math.min(dtSec * 10, 1));
+    displayScore = gap > 0
+      ? Math.min(targetScore, displayScore + step)
+      : Math.max(targetScore, displayScore - step);
+    scoreEl.textContent = Math.floor(displayScore).toLocaleString();
+  }
+
+  // ===========================================================================
+  // VFX SYSTEMS — Block Blast-style juice
+  // ===========================================================================
+
+  // --- Color palettes per quality tier ---
+  const TIER_COLORS = {
+    brilliant: { primary: '#00FFFF', secondary: '#FFFFFF', glow: 'rgba(0,255,255,0.4)' },
+    great:     { primary: '#FFD700', secondary: '#FFA500', glow: 'rgba(255,215,0,0.4)' },
+    good:      { primary: '#66FF66', secondary: '#33CC33', glow: 'rgba(102,255,102,0.3)' },
+    nice:      { primary: '#6699FF', secondary: '#3366CC', glow: 'rgba(102,153,255,0.3)' },
+  };
+
+  const CAPTURE_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF922B', '#CC5DE8'];
+
+  // --- 1. PARTICLES ---
+  const particles = [];
+
+  function spawnParticles(cx, cy, count, colors, opts = {}) {
+    const speed   = opts.speed   || 180;
+    const sizeMin = opts.sizeMin || 3;
+    const sizeMax = opts.sizeMax || 7;
+    const gravity = opts.gravity ?? 100;
+    const decay   = opts.decay   || 0.7;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const vel   = (0.5 + Math.random() * 0.5) * speed;
+      particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * vel,
+        vy: Math.sin(angle) * vel - (opts.upBias || 30),
+        size: sizeMin + Math.random() * (sizeMax - sizeMin),
+        color: Array.isArray(colors) ? colors[Math.floor(Math.random() * colors.length)] : colors,
+        life: 1.0,
+        decay: decay + Math.random() * 0.3,
+        gravity,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 8,
+        shape: opts.shape || (Math.random() > 0.5 ? 'square' : 'circle'),
+      });
+    }
+  }
+
+  function updateParticles(dtSec) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= p.decay * dtSec;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.vy += p.gravity * dtSec;
+      p.x  += p.vx * dtSec;
+      p.y  += p.vy * dtSec;
+      p.rotation += p.rotSpeed * dtSec;
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.fillStyle = p.color;
+      const s = p.size * (0.5 + 0.5 * p.life);
+      if (p.shape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(0, 0, s / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+      }
+      ctx.restore();
+    }
+  }
+
+  // --- 2. FLOATING TEXT ---
+  const floatingTexts = [];
+
+  function spawnFloatingText(cx, cy, text, color, size = 18) {
+    floatingTexts.push({
+      x: cx, y: cy, startY: cy,
+      text, color, size,
+      life: 1.0,
+      duration: 1.2,
+      t: 0,
+    });
+  }
+
+  function updateFloatingTexts(dtSec) {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      const ft = floatingTexts[i];
+      ft.t += dtSec;
+      const progress = ft.t / ft.duration;
+      if (progress >= 1) { floatingTexts.splice(i, 1); continue; }
+      ft.life = 1 - progress;
+      ft.y = ft.startY - 45 * Math.pow(progress, 0.4);
+    }
+  }
+
+  function drawFloatingTexts() {
+    for (const ft of floatingTexts) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, ft.life * 2);
+      ctx.font = `bold ${ft.size}px "Segoe UI", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillText(ft.text, ft.x + 1.5, ft.y + 1.5);
+      // Main text
+      ctx.fillStyle = ft.color;
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.restore();
+    }
+  }
+
+  // --- 3. SCREEN SHAKE ---
+  let shakeAmount = 0;
+  const SHAKE_DECAY = 12;
+
+  function triggerShake(amount) {
+    shakeAmount = Math.max(shakeAmount, amount);
+  }
+
+  function updateShake(dtSec) {
+    shakeAmount *= Math.exp(-SHAKE_DECAY * dtSec);
+    if (shakeAmount < 0.3) shakeAmount = 0;
+  }
+
+  function getShakeOffset() {
+    if (shakeAmount <= 0) return [0, 0];
+    return [
+      (Math.random() - 0.5) * 2 * shakeAmount,
+      (Math.random() - 0.5) * 2 * shakeAmount,
+    ];
+  }
+
+  // --- 4. SCREEN FLASH ---
+  let flashAlpha = 0;
+  let flashColor = '#FFFFFF';
+
+  function triggerFlash(color = '#FFFFFF', alpha = 0.35) {
+    flashColor = color;
+    flashAlpha = Math.max(flashAlpha, alpha);
+  }
+
+  function updateFlash(dtSec) {
+    flashAlpha -= dtSec * 2.5;
+    if (flashAlpha < 0) flashAlpha = 0;
+  }
+
+  function drawFlash() {
+    if (flashAlpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = flashColor;
+    ctx.fillRect(0, 0, CANVAS_LOGICAL, CANVAS_LOGICAL);
+    ctx.restore();
+  }
+
+  // --- 5. SHOCKWAVES ---
+  const shockwaves = [];
+
+  function spawnShockwave(cx, cy, maxRadius = 80, color = '#FFD700') {
+    shockwaves.push({
+      x: cx, y: cy,
+      radius: 0, maxRadius,
+      color, life: 1.0,
+      duration: 0.5,
+      t: 0,
+    });
+  }
+
+  function updateShockwaves(dtSec) {
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+      const sw = shockwaves[i];
+      sw.t += dtSec;
+      const progress = sw.t / sw.duration;
+      if (progress >= 1) { shockwaves.splice(i, 1); continue; }
+      sw.radius = sw.maxRadius * Math.pow(progress, 0.5);
+      sw.life = 1 - progress;
+    }
+  }
+
+  function drawShockwaves() {
+    for (const sw of shockwaves) {
+      ctx.save();
+      ctx.globalAlpha = sw.life * 0.6;
+      ctx.strokeStyle = sw.color;
+      ctx.lineWidth = 3 * sw.life;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // --- 6. SPLASH TEXT (bouncy center text for move quality) ---
+  const splashTexts = [];
+
+  function spawnSplashText(text, color, size = 38) {
+    // Remove any existing splash so they don't stack
+    splashTexts.length = 0;
+    splashTexts.push({
+      text, color, size,
+      scale: 0,
+      y: CANVAS_LOGICAL * 0.32,
+      growDur: 0.18,
+      holdDur: 1.2,
+      shrinkDur: 0.25,
+      t: 0,
+      totalDur: 0.18 + 1.2 + 0.25,
+    });
+  }
+
+  function elasticOut(t) {
+    if (t === 0 || t === 1) return t;
+    return Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
   }
 
   // ---------------------------------------------------------------------------
-  // Register Game callbacks
+  // Promotion choice menu (shown when player holds Shift and promotes a pawn)
   // ---------------------------------------------------------------------------
+  const PROMO_PIECES = ['Q', 'R', 'B', 'N'];
+  let promotionMenu  = null; // { fromCol, fromRow, toCol, toRow, isEP, slots }
+
+  function roundRect(rc, x, y, w, h, r) {
+    rc.beginPath();
+    rc.moveTo(x + r, y);
+    rc.lineTo(x + w - r, y);
+    rc.arcTo(x + w, y,     x + w, y + r,     r);
+    rc.lineTo(x + w, y + h - r);
+    rc.arcTo(x + w, y + h, x + w - r, y + h, r);
+    rc.lineTo(x + r, y + h);
+    rc.arcTo(x,      y + h, x,       y + h - r, r);
+    rc.lineTo(x,     y + r);
+    rc.arcTo(x,      y,     x + r,   y,         r);
+    rc.closePath();
+  }
+
+  function showPromotionMenu(fromCol, fromRow, toCol, toRow, isEP) {
+    const slotSize = Math.round(SQUARE * 1.05);
+    const padding  = 5;
+    const menuW    = slotSize + padding * 2;
+    const menuH    = slotSize * 4 + padding * 5;
+    const [bx, by] = boardToCanvas(toCol, toRow);
+    let menuX = bx - menuW / 2;
+    let menuY = by - padding;
+    menuX = Math.max(4, Math.min(CANVAS_LOGICAL - menuW - 4, menuX));
+    menuY = Math.max(4, Math.min(CANVAS_LOGICAL - menuH - 4, menuY));
+    promotionMenu = {
+      fromCol, fromRow, toCol, toRow, isEP,
+      x: menuX, y: menuY, w: menuW, h: menuH,
+      hoveredIdx: -1,
+      slots: PROMO_PIECES.map((type, i) => ({
+        type,
+        x: menuX + padding,
+        y: menuY + padding + i * (slotSize + padding),
+        w: slotSize, h: slotSize,
+      })),
+    };
+  }
+
+  function drawPromotionMenu() {
+    if (!promotionMenu) return;
+    const m = promotionMenu;
+    ctx.save();
+    // Backdrop
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.94)';
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 2;
+    roundRect(ctx, m.x, m.y, m.w, m.h, 9);
+    ctx.fill();
+    ctx.stroke();
+    // Slots
+    for (let i = 0; i < m.slots.length; i++) {
+      const slot = m.slots[i];
+      const hovered = (m.hoveredIdx === i);
+      ctx.fillStyle = hovered ? 'rgba(255,215,0,0.22)' : 'rgba(255,255,255,0.06)';
+      roundRect(ctx, slot.x, slot.y, slot.w, slot.h, 6);
+      ctx.fill();
+      drawPieceSprite(slot.type, slot.x + 3, slot.y + 3, slot.w - 6, slot.h - 6);
+    }
+    // Title label
+    ctx.font = 'bold 11px "Segoe UI", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('PROMOTE', m.x + m.w / 2, m.y + 2);
+    ctx.restore();
+  }
+
+  function updateSplashTexts(dtSec) {
+    for (let i = splashTexts.length - 1; i >= 0; i--) {
+      const st = splashTexts[i];
+      st.t += dtSec;
+      if (st.t >= st.totalDur) { splashTexts.splice(i, 1); continue; }
+
+      if (st.t < st.growDur) {
+        // Elastic bounce-in
+        st.scale = elasticOut(st.t / st.growDur);
+      } else if (st.t < st.growDur + st.holdDur) {
+        // Gentle pulse
+        const holdT = (st.t - st.growDur) / st.holdDur;
+        st.scale = 1.0 + 0.04 * Math.sin(holdT * Math.PI * 4);
+      } else {
+        // Shrink out
+        const p = (st.t - st.growDur - st.holdDur) / st.shrinkDur;
+        st.scale = 1.0 - p;
+      }
+    }
+  }
+
+  function drawSplashTexts() {
+    for (const st of splashTexts) {
+      if (st.scale <= 0) continue;
+      ctx.save();
+      ctx.translate(CANVAS_LOGICAL / 2, st.y);
+      ctx.scale(st.scale, st.scale);
+      ctx.font = `900 ${st.size}px "Segoe UI", Impact, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Glow
+      ctx.shadowColor = st.color;
+      ctx.shadowBlur = 20;
+      // Outline
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = 4;
+      ctx.strokeText(st.text, 0, 0);
+      // Fill
+      ctx.fillStyle = st.color;
+      ctx.fillText(st.text, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // --- 7. COMBO SYSTEM ---
+  let comboCount = 0;
+  let comboTimer = 0;
+  const COMBO_TIMEOUT = 4;
+
+  let comboDisplay = { count: 0, life: 0, scale: 0, t: 0 };
+
+  function incrementCombo() {
+    comboCount++;
+    comboTimer = COMBO_TIMEOUT;
+    if (comboCount >= 2) {
+      comboDisplay = { count: comboCount, life: 2.5, scale: 0, t: 0 };
+    }
+  }
+
+  function updateCombo(dtSec) {
+    if (comboTimer > 0) {
+      comboTimer -= dtSec;
+      if (comboTimer <= 0) {
+        comboCount = 0;
+        comboTimer = 0;
+      }
+    }
+    if (comboDisplay.life > 0) {
+      comboDisplay.t += dtSec;
+      if (comboDisplay.t < 0.15) {
+        comboDisplay.scale = elasticOut(comboDisplay.t / 0.15);
+      } else {
+        comboDisplay.scale = 1.0;
+      }
+      comboDisplay.life -= dtSec;
+    }
+  }
+
+  function drawCombo() {
+    if (comboDisplay.life <= 0 || comboDisplay.count < 2) return;
+    ctx.save();
+    const alpha = Math.min(1, comboDisplay.life);
+    ctx.globalAlpha = alpha;
+    ctx.translate(CANVAS_LOGICAL / 2, CANVAS_LOGICAL * 0.52);
+    ctx.scale(comboDisplay.scale, comboDisplay.scale);
+    ctx.font = `900 28px "Segoe UI", Impact, Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Rainbow color cycling
+    const hue = (Date.now() / 5) % 360;
+    ctx.fillStyle = `hsl(${hue}, 100%, 65%)`;
+    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(`COMBO \u00D7${comboDisplay.count}`, 0, 0);
+    ctx.fillText(`COMBO \u00D7${comboDisplay.count}`, 0, 0);
+    ctx.restore();
+  }
+
+  // ===========================================================================
+  // Register Game callbacks
+  // ===========================================================================
   Game.setCallbacks({
     onStateChange : () => { /* redrawn every frame */ },
-    onGameOver    : (score, hs) => {
+
+    onGameOver: (score, hs) => {
       document.getElementById('goScore').textContent     = `Score: ${Math.floor(score)}`;
       document.getElementById('goHighScore').textContent = `High Score: ${Math.floor(hs)}`;
       document.getElementById('gameOverPanel').classList.remove('hidden');
     },
-    onGreatMove: () => {
-      document.getElementById('banner').textContent = 'GREAT MOVE!';
-      document.getElementById('banner').className   = 'banner great visible';
-      addEffect('greatMove', 2200);
-      clearTimeout(window._bannerTimer);
-      window._bannerTimer = setTimeout(() => {
-        document.getElementById('banner').classList.remove('visible');
-      }, 2200);
+
+    onCapture: (info) => {
+      playSound(sndCapture);
+      const [cx, cy] = boardToCanvas(info.col, info.row);
+      // Particle burst
+      const colors = info.isPlayerCapture
+        ? CAPTURE_COLORS
+        : ['#888', '#aaa', '#666'];
+      spawnParticles(cx, cy, 18 + Math.floor(info.value * 3), colors, {
+        speed: 130 + info.value * 15,
+        sizeMin: 2, sizeMax: 6,
+        gravity: 90,
+      });
+      // Shockwave
+      spawnShockwave(cx, cy, 40 + info.value * 6, info.isPlayerCapture ? '#FFD93D' : '#888');
+      // Floating score text
+      if (info.isPlayerCapture) {
+        const pts = Math.floor(info.value * 10);
+        spawnFloatingText(cx, cy - 10, `+${pts}`, '#FFD93D', 16 + Math.min(info.value * 2, 10));
+      }
+      // Combo
+      if (info.isPlayerCapture) {
+        incrementCombo();
+      }
     },
-    onGoodMove: () => {
-      document.getElementById('banner').textContent = 'Good Move!';
-      document.getElementById('banner').className   = 'banner good visible';
-      clearTimeout(window._bannerTimer);
-      window._bannerTimer = setTimeout(() => {
-        document.getElementById('banner').classList.remove('visible');
-      }, 1500);
+
+    onPieceMove: ({ wasCapture }) => {
+      if (!wasCapture) playSound(sndMove);
     },
-    onScoreChange: (score, hs, moveNum) => {
-      document.getElementById('scoreLabel').textContent    = `Score: ${Math.floor(score)}`;
-      document.getElementById('highScoreLabel').textContent= `High: ${Math.floor(hs)}`;
-      document.getElementById('moveLabel').textContent     = `Moves: ${moveNum}`;
+
+    onPromotion: (info) => {
+      const [cx, cy] = boardToCanvas(info.col, info.row);
+      const PIECE_NAMES = { Q: 'QUEEN!', R: 'ROOK!', B: 'BISHOP!', N: 'KNIGHT!' };
+      const label = PIECE_NAMES[info.type] || 'PROMOTED!';
+      spawnParticles(cx, cy, 30, ['#FFD700', '#FFF', '#FF6B6B', '#CC5DE8'], {
+        speed: 200, sizeMin: 3, sizeMax: 8, gravity: 60, upBias: 60,
+      });
+      spawnShockwave(cx, cy, 90, '#FFD700');
+      spawnFloatingText(cx, cy - 15, label, '#FFD700', 22);
+      triggerFlash('#FFD700', 0.2);
+    },
+
+    onMoveQuality: () => {
+      // move-quality banners disabled — score bonuses still applied in game.js
+    },
+
+    onClearBoard: (bonus) => {
+      // All opponent pieces wiped — big celebration
+      triggerFlash('#FFD700', 0.45);
+      triggerShake(14);
+      spawnSplashText(`CLEARED! +${bonus}`, '#FFD700', 44);
+      spawnParticles(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 60,
+        ['#FFD700', '#FF6B6B', '#6BCB77', '#4D96FF', '#CC5DE8', '#FFF'], {
+        speed: 280, sizeMin: 3, sizeMax: 9, gravity: 40, upBias: 60,
+      });
+      spawnShockwave(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 200, '#FFD700');
+      setTimeout(() => spawnShockwave(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 150, '#FFF'), 150);
+    },
+
+    onScoreChange: (score, hs, moves) => {
+      // Animate score counting up
+      targetScore = score;
+      // Pop the score element
+      scoreEl.classList.remove('score-pop');
+      void scoreEl.offsetWidth; // reflow to restart animation
+      scoreEl.classList.add('score-pop');
+      // High score and moves update immediately
+      highEl.textContent  = Math.floor(hs).toLocaleString();
+      moveEl.textContent  = `Moves: ${moves}`;
     },
   });
 
@@ -130,10 +598,11 @@
   if (!loaded) {
     Game.initBoard();
   } else {
-    // Sync score labels from loaded state
-    document.getElementById('highScoreLabel').textContent = `High: ${Math.floor(Game.highScore)}`;
-    document.getElementById('scoreLabel').textContent     = `Score: ${Math.floor(Game.score)}`;
-    document.getElementById('moveLabel').textContent      = `Moves: ${Game.moveNum}`;
+    displayScore = Game.score;
+    targetScore  = Game.score;
+    scoreEl.textContent = Math.floor(Game.score).toLocaleString();
+    highEl.textContent  = Math.floor(Game.highScore).toLocaleString();
+    moveEl.textContent  = `Moves: ${Game.moveNum}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -168,8 +637,7 @@
     const now = Date.now();
     for (const p of Game.pieces) {
       if (p === skipPiece) continue;
-      const img = pieceImgs[p.type];
-      if (!img) continue;
+      if (SPRITE_COLS[p.type] === undefined) continue;
 
       let cx, cy;
       if (p.animating && p.animT < 1) {
@@ -185,51 +653,58 @@
       const sz = SQUARE * 0.95;
       ctx.save();
       ctx.globalAlpha = p.alpha;
-      ctx.drawImage(img, cx - sz / 2, cy - sz / 2, sz, sz);
+      drawPieceSprite(p.type, cx - sz / 2, cy - sz / 2, sz, sz);
 
-      // Sparkle indicator on convertable pieces
+      // Sparkle indicator on convertable pieces — big corner star
       if (p.convertable) {
-        ctx.globalAlpha = p.alpha * (0.55 + 0.45 * Math.sin(now / 380));
+        const pulse = 0.7 + 0.3 * Math.sin(now / 280);
+        ctx.globalAlpha = p.alpha * pulse;
         if (sparkleImg) {
-          const spSz = sz * 0.42;
-          ctx.drawImage(sparkleImg, cx + sz * 0.22, cy - sz * 0.55, spSz, spSz);
+          const spSz = sz * 1.05;  // large star covers the corner
+          ctx.drawImage(sparkleImg, cx + sz * 0.1, cy - sz * 0.72, spSz, spSz);
         } else {
-          // Fallback: yellow dot
-          ctx.globalAlpha = 0.85;
+          ctx.globalAlpha = 0.9;
           ctx.fillStyle = '#FFD700';
+          ctx.shadowColor = '#FFD700';
+          ctx.shadowBlur = 8;
           ctx.beginPath();
-          ctx.arc(cx + sz * 0.35, cy - sz * 0.35, sz * 0.12, 0, Math.PI * 2);
+          ctx.arc(cx + sz * 0.38, cy - sz * 0.38, sz * 0.18, 0, Math.PI * 2);
           ctx.fill();
+          ctx.shadowBlur = 0;
         }
       }
       ctx.restore();
     }
   }
 
+  // Draw captured pieces that are fading out while attacker slides toward them
+  function drawDyingPieces() {
+    for (const p of Game.dyingPieces) {
+      if (SPRITE_COLS[p.type] === undefined) continue;
+      const [cx, cy] = boardToCanvas(p.x, p.y);
+      const sz = SQUARE * 0.95;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.dyingAlpha);
+      drawPieceSprite(p.type, cx - sz / 2, cy - sz / 2, sz, sz);
+      ctx.restore();
+    }
+  }
+
   function drawDragged() {
     if (!dragging) return;
-    const img = pieceImgs[dragging.piece.type];
-    if (!img) return;
     const sz = SQUARE * 1.02;
     ctx.save();
     ctx.globalAlpha = 0.92;
-    ctx.drawImage(img, dragging.curX - sz / 2, dragging.curY - sz / 2, sz, sz);
+    drawPieceSprite(dragging.piece.type, dragging.curX - sz / 2, dragging.curY - sz / 2, sz, sz);
     ctx.restore();
-  }
-
-  // Great-move ripple effect drawn over board (CSS-based gravity wave)
-  function updateEffects(dt) {
-    effects = effects.filter(e => {
-      e.t += dt;
-      return e.t < e.maxT;
-    });
   }
 
   // ---------------------------------------------------------------------------
   // Main render loop
   // ---------------------------------------------------------------------------
   function render(ts) {
-    const dt = ts - lastTs;
+    const dt    = Math.min(ts - lastTs, 50); // cap delta to prevent huge jumps
+    const dtSec = dt / 1000;
     lastTs = ts;
 
     // Advance piece animations
@@ -240,10 +715,30 @@
       }
     }
 
-    updateEffects(dt);
+    // Fade out dying (captured) pieces — decay over ANIM_MS duration
+    for (let i = Game.dyingPieces.length - 1; i >= 0; i--) {
+      const dp = Game.dyingPieces[i];
+      dp.dyingAlpha -= dtSec * (1.0 / (ANIM_MS / 1000));
+      if (dp.dyingAlpha <= 0) Game.dyingPieces.splice(i, 1);
+    }
 
-    // Clear
-    ctx.clearRect(0, 0, CANVAS_LOGICAL, CANVAS_LOGICAL);
+    // Update all VFX systems
+    updateParticles(dtSec);
+    updateFloatingTexts(dtSec);
+    updateShake(dtSec);
+    updateFlash(dtSec);
+    updateShockwaves(dtSec);
+    updateSplashTexts(dtSec);
+    updateCombo(dtSec);
+    updateScoreDisplay(dtSec);
+
+    // --- Apply screen shake transform ---
+    const [sx, sy] = getShakeOffset();
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // Clear (slightly oversized to cover shake)
+    ctx.clearRect(-10, -10, CANVAS_LOGICAL + 20, CANVAS_LOGICAL + 20);
 
     // Board
     if (boardImg) {
@@ -255,11 +750,37 @@
     // Move highlights
     drawHighlights();
 
+    // Shockwaves (behind pieces)
+    drawShockwaves();
+
+    // Dying (captured) pieces fade behind the incoming attacker
+    drawDyingPieces();
+
     // Pieces (skip dragged piece)
     drawPieces(dragging ? dragging.piece : null);
 
     // Dragged piece on top
     drawDragged();
+
+    // Promotion menu (above pieces, below particles/text)
+    drawPromotionMenu();
+
+    // Particles (above pieces)
+    drawParticles();
+
+    // Floating text
+    drawFloatingTexts();
+
+    // Screen flash overlay
+    drawFlash();
+
+    // Splash text (topmost layer)
+    drawSplashTexts();
+
+    // Combo display
+    drawCombo();
+
+    ctx.restore(); // end shake transform
 
     requestAnimationFrame(render);
   }
@@ -283,6 +804,26 @@
   // ---------------------------------------------------------------------------
   function onPointerDown(e) {
     e.preventDefault();
+    shiftHeld = !!(e.shiftKey);
+
+    // Intercept promotion-menu clicks before anything else
+    if (promotionMenu) {
+      const [cx, cy] = getCanvasXY(e);
+      for (const slot of promotionMenu.slots) {
+        if (cx >= slot.x && cx <= slot.x + slot.w &&
+            cy >= slot.y && cy <= slot.y + slot.h) {
+          const { fromCol, fromRow, toCol, toRow, isEP } = promotionMenu;
+          promotionMenu = null;
+          Game.onPieceMovedWithPromotion(fromCol, fromRow, toCol, toRow, isEP, slot.type);
+          const mp = Game.pieces.find(p => p.x === toCol && p.y === toRow);
+          if (mp) { mp.animT = 1; mp.animating = false; }
+          return;
+        }
+      }
+      promotionMenu = null; // click outside = cancel
+      return;
+    }
+
     if (!Game.canMovePieces) return;
 
     const [cx, cy]   = getCanvasXY(e);
@@ -290,9 +831,9 @@
     if (col < 0 || col > 7 || row < 0 || row > 7) return;
 
     const piece = Game.pieces.find(p => p.x === col && p.y === row);
-    if (!piece)                              return; // empty square
-    if (!Game.isBlack(piece.type))           return; // white piece (AI)
-    if (piece.movesUntilFormed > 0)          return; // still forming
+    if (!piece)                              return;
+    if (!Game.isBlack(piece.type))           return;
+    if (piece.movesUntilFormed > 0)          return;
 
     dragging = { piece, startX: col, startY: row, curX: cx, curY: cy };
     highlighted = Game.getMoves(col, row);
@@ -317,17 +858,25 @@
 
     const [toCol, toRow] = canvasToBoard(cx, cy);
     if (toCol < 0 || toCol > 7 || toRow < 0 || toRow > 7) return;
-    if (toCol === startX && toRow === startY) return; // dropped on same square
+    if (toCol === startX && toRow === startY) return;
 
     if (!Game.isValidMove(startX, startY, toCol, toRow)) return;
 
-    // Detect en passant: pawn moving diagonally to empty square
-    const ep = Game.enPassantTarget;
+    // Detect en passant
     const isEP = piece.type.toLowerCase() === 'p' &&
                  toCol !== startX &&
                  Game.board[toCol][toRow] === '';
 
+    // Shift-held on a black pawn reaching row 0 → show promotion picker
+    if (piece.type === 'P' && toRow === 0 && shiftHeld) {
+      showPromotionMenu(startX, startY, toCol, toRow, isEP);
+      return; // wait for menu selection
+    }
+
     Game.onPieceMoved(startX, startY, toCol, toRow, isEP);
+    // Cancel slide animation — piece was already dragged visually to destination
+    const movedPiece = Game.pieces.find(p => p.x === toCol && p.y === toRow);
+    if (movedPiece) { movedPiece.animT = 1; movedPiece.animating = false; }
   }
 
   canvas.addEventListener('mousedown',  onPointerDown);
@@ -337,12 +886,20 @@
   canvas.addEventListener('touchmove',  onPointerMove, { passive: false });
   canvas.addEventListener('touchend',   onPointerUp,   { passive: false });
 
-  // Cancel drag on leave
   canvas.addEventListener('mouseleave', () => {
     if (dragging) {
       dragging    = null;
       highlighted = [];
     }
+  });
+
+  // Track hover over promotion menu for highlight
+  canvas.addEventListener('mousemove', (e) => {
+    if (!promotionMenu) return;
+    const [cx, cy] = getCanvasXY(e);
+    promotionMenu.hoveredIdx = promotionMenu.slots.findIndex(
+      s => cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -354,6 +911,22 @@
 
   document.getElementById('closeMenuBtn').addEventListener('click', () => {
     document.getElementById('settingsPanel').classList.add('hidden');
+  });
+
+  // Piece colour toggle (black or white appearance for player)
+  document.querySelectorAll('.swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.swatch').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      playerPieceRow = parseInt(btn.dataset.row, 10);
+    });
+  });
+
+  document.getElementById('creditsBtn').addEventListener('click', () => {
+    document.getElementById('creditsPanel').classList.remove('hidden');
+  });
+  document.getElementById('closeCreditsBtn').addEventListener('click', () => {
+    document.getElementById('creditsPanel').classList.add('hidden');
   });
 
   document.getElementById('restartFromGameOver').addEventListener('click', () => {
