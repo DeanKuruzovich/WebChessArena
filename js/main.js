@@ -17,6 +17,51 @@
   ctx.scale(DPR, DPR);
 
   // ---------------------------------------------------------------------------
+  // Wood-grain background canvas (full-screen, behind everything)
+  // ---------------------------------------------------------------------------
+  const woodBgEl  = document.getElementById('woodBg');
+  const woodCtx   = woodBgEl.getContext('2d');
+  let   woodT     = 0;
+
+  function resizeWoodBg() {
+    woodBgEl.width  = window.innerWidth;
+    woodBgEl.height = window.innerHeight;
+  }
+  resizeWoodBg();
+
+  function drawWoodBackground(dtSec) {
+    woodT += dtSec * 0.09;
+    const w = woodBgEl.width;
+    const h = woodBgEl.height;
+    // Base fill
+    woodCtx.fillStyle = '#2d1408';
+    woodCtx.fillRect(0, 0, w, h);
+    // Grain lines
+    const numLines = 130;
+    for (let i = 0; i < numLines; i++) {
+      const t   = i / numLines;
+      const y0  = t * h * 1.15 - h * 0.08;
+      const lt  = 10 + 9 * Math.sin(i * 0.31 + woodT * 2.0 + 0.5);
+      const op  = 0.15 + 0.13 * Math.abs(Math.sin(i * 0.47 + woodT * 0.8));
+      woodCtx.beginPath();
+      const segs = 14;
+      for (let s = 0; s <= segs; s++) {
+        const x  = (s / segs) * w;
+        const dy = Math.sin(s * 0.65 + woodT * 1.2 + i * 0.19) * h * 0.022
+                 + Math.sin(s * 0.22 + woodT * 0.6 + i * 0.40) * h * 0.010;
+        if (s === 0) woodCtx.moveTo(x, y0 + dy);
+        else         woodCtx.lineTo(x, y0 + dy);
+      }
+      const r = Math.round(135 + lt);
+      const g = Math.round(58  + lt * 0.5);
+      const b = Math.round(8   + lt * 0.2);
+      woodCtx.strokeStyle = `rgba(${r},${g},${b},${op.toFixed(2)})`;
+      woodCtx.lineWidth   = 1.4 + 0.9 * Math.abs(Math.sin(i * 0.53));
+      woodCtx.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Asset loading
   // ---------------------------------------------------------------------------
   function loadImage(src) {
@@ -105,7 +150,7 @@
   let targetScore  = 0;
   const scoreEl    = document.getElementById('scoreLabel');
   const highEl     = document.getElementById('highScoreLabel');
-  const moveEl     = document.getElementById('moveLabel');
+  const moveEl     = document.getElementById('moveLabel'); // may be null
 
   function updateScoreDisplay(dtSec) {
     if (displayScore === targetScore) return;
@@ -116,6 +161,32 @@
       ? Math.min(targetScore, displayScore + step)
       : Math.max(targetScore, displayScore - step);
     scoreEl.textContent = Math.floor(displayScore).toLocaleString();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Clock
+  // ---------------------------------------------------------------------------
+  let clockSeconds = 0;
+  let clockRunning = false;
+  let showClock    = false;
+  const clockEl    = document.getElementById('clockLabel');
+
+  function formatClock(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function updateClock(dtSec) {
+    if (!clockRunning) return;
+    clockSeconds += dtSec;
+    if (showClock) clockEl.textContent = formatClock(clockSeconds);
+  }
+
+  function resetClock() {
+    clockSeconds = 0;
+    clockRunning = true;
+    if (showClock) clockEl.textContent = '0:00';
   }
 
   // ===========================================================================
@@ -579,15 +650,21 @@
     },
 
     onScoreChange: (score, hs, moves) => {
-      // Animate score counting up
-      targetScore = score;
-      // Pop the score element
-      scoreEl.classList.remove('score-pop');
-      void scoreEl.offsetWidth; // reflow to restart animation
-      scoreEl.classList.add('score-pop');
+      // If game reset, snap score to 0 immediately instead of counting down
+      if (score === 0) {
+        displayScore = 0;
+        targetScore  = 0;
+        scoreEl.textContent = '0';
+      } else {
+        targetScore = score;
+        // Pop the score element
+        scoreEl.classList.remove('score-pop');
+        void scoreEl.offsetWidth; // reflow to restart animation
+        scoreEl.classList.add('score-pop');
+      }
       // High score and moves update immediately
-      highEl.textContent  = Math.floor(hs).toLocaleString();
-      moveEl.textContent  = `Moves: ${moves}`;
+      highEl.textContent = Math.floor(hs).toLocaleString();
+      if (moveEl) moveEl.textContent = `Moves: ${moves}`;
     },
   });
 
@@ -597,12 +674,14 @@
   const loaded = Game.load();
   if (!loaded) {
     Game.initBoard();
+    resetClock();
   } else {
     displayScore = Game.score;
     targetScore  = Game.score;
     scoreEl.textContent = Math.floor(Game.score).toLocaleString();
     highEl.textContent  = Math.floor(Game.highScore).toLocaleString();
-    moveEl.textContent  = `Moves: ${Game.moveNum}`;
+    if (moveEl) moveEl.textContent  = `Moves: ${Game.moveNum}`;
+    resetClock();
   }
 
   // ---------------------------------------------------------------------------
@@ -731,6 +810,8 @@
     updateSplashTexts(dtSec);
     updateCombo(dtSec);
     updateScoreDisplay(dtSec);
+    updateClock(dtSec);
+    drawWoodBackground(dtSec);
 
     // --- Apply screen shake transform ---
     const [sx, sy] = getShakeOffset();
@@ -913,6 +994,36 @@
     document.getElementById('settingsPanel').classList.add('hidden');
   });
 
+  // Click outside the settings panel (on the dark overlay) = resume
+  document.getElementById('settingsPanel').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget)
+      document.getElementById('settingsPanel').classList.add('hidden');
+  });
+
+  // Help / Rules
+  document.getElementById('helpBtn').addEventListener('click', () => {
+    document.getElementById('helpPanel').classList.remove('hidden');
+  });
+  document.getElementById('closeHelpBtn').addEventListener('click', () => {
+    document.getElementById('helpPanel').classList.add('hidden');
+  });
+  document.getElementById('helpPanel').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget)
+      document.getElementById('helpPanel').classList.add('hidden');
+  });
+
+  // Clock toggle in settings
+  document.getElementById('showClockCheck').addEventListener('change', (e) => {
+    showClock = e.target.checked;
+    const clockBlock = document.getElementById('clock-block');
+    if (showClock) {
+      clockEl.textContent = formatClock(clockSeconds);
+      if (clockBlock) clockBlock.classList.remove('hidden');
+    } else {
+      if (clockBlock) clockBlock.classList.add('hidden');
+    }
+  });
+
   // Piece colour toggle (black or white appearance for player)
   document.querySelectorAll('.swatch').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -932,20 +1043,23 @@
   document.getElementById('restartFromGameOver').addEventListener('click', () => {
     document.getElementById('gameOverPanel').classList.add('hidden');
     Game.resetGame();
+    resetClock();
   });
 
   document.getElementById('restartFromMenu').addEventListener('click', () => {
     document.getElementById('settingsPanel').classList.add('hidden');
     Game.resetGame();
+    resetClock();
   });
 
   // ---------------------------------------------------------------------------
   // Responsive sizing — keep canvas square and as large as viewport allows
   // ---------------------------------------------------------------------------
   function resize() {
-    const maxPx   = Math.min(window.innerWidth, window.innerHeight - 100, 600);
+    const maxPx   = Math.min(window.innerWidth, window.innerHeight - 130, 600);
     canvas.style.width  = maxPx + 'px';
     canvas.style.height = maxPx + 'px';
+    resizeWoodBg();
   }
   window.addEventListener('resize', resize);
   resize();

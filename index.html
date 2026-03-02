@@ -8,24 +8,36 @@
 </head>
 <body>
 
+<!-- Full-screen dynamic wood-grain background (drawn by main.js) -->
+<canvas id="woodBg"></canvas>
+
 <div id="app">
+
+  <!-- Top bar: title left, buttons right -->
+  <div id="top-bar">
+    <h1 id="gameTitle">Chess Arena</h1>
+    <div id="top-buttons">
+      <button id="helpBtn" class="hud-btn" title="Rules">?</button>
+      <button id="menuBtn" class="hud-btn" title="Settings">&#9776;</button>
+    </div>
+  </div>
 
   <!-- Chess board canvas -->
   <canvas id="board"></canvas>
 
-  <!-- HUD -->
-  <div id="hud">
+  <!-- Bottom bar: score, best, clock -->
+  <div id="bottom-bar">
     <div class="score-block" id="score-block">
       <div class="score-title">SCORE</div>
       <div id="scoreLabel">0</div>
     </div>
-    <div class="score-block score-block-best" id="high-block">
+    <div class="score-block" id="high-block">
       <div class="score-title">BEST</div>
       <div id="highScoreLabel">0</div>
     </div>
-    <div id="hud-right">
-      <span id="moveLabel">Moves: 0</span>
-      <button id="menuBtn" title="Settings">☰</button>
+    <div class="score-block hidden" id="clock-block">
+      <div class="score-title">TIME</div>
+      <div id="clockLabel">0:00</div>
     </div>
   </div>
 
@@ -61,11 +73,36 @@
         </button>
       </div>
 
+      <!-- Clock Toggle -->
+      <div class="settings-option">
+        <input type="checkbox" id="showClockCheck" />
+        <label for="showClockCheck">Show Clock</label>
+      </div>
+
       <div style="margin-top:18px;">
         <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
         <button id="creditsBtn" class="btn btn-secondary">Credits</button><br/>
         <button id="closeMenuBtn" class="btn btn-secondary">Resume</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Help / Rules panel -->
+  <div id="helpPanel" class="overlay hidden">
+    <div class="panel">
+      <h2>How to Play</h2>
+      <div class="help-content">
+        <ul>
+          <li><strong>Goal:</strong> Capture white pieces to score points. Survive as long as you can.</li>
+          <li><strong>Your pieces</strong> are black. Drag and drop them to move.</li>
+          <li><strong>Piece values:</strong> Pawn 1, Knight 2.8, Bishop 3.2, Rook 4.8, King 4, Queen 9.3.</li>
+          <li><strong>Convertable pieces</strong> (marked with a ★) join your side when captured.</li>
+          <li><strong>Promotion:</strong> Hold Shift when moving a pawn to the last rank to choose a piece.</li>
+          <li><strong>Clear the board</strong> of all white pieces for a +100 bonus!</li>
+          <li><strong>Game Over</strong> when you have no legal moves left.</li>
+        </ul>
+      </div>
+      <button id="closeHelpBtn" class="btn btn-primary" style="margin-top:8px;">Got it!</button>
     </div>
   </div>
 

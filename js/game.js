@@ -11,6 +11,12 @@ const Game = (() => {
   // White-piece spawn distribution (lowercase = white AI pieces)
   const PIECE_DIST = ['p','p','p','p','p','p','k','q','r','r','n','n','n','b','b','b'];
 
+  // Probability to spawn a new opponent piece based on current white-piece count.
+  // Index = current white-piece count (capped at array length - 1).
+  // 5 slots so it’s easy to fine-tune each level:
+  //  index 0 = 0 pieces on board, index 1 = 1 piece, … index 4 = 4+ pieces
+  const OPP_SPAWN_PROBS = [1.00, 0.80, 0.60, 0.40, 0.20];
+
   // Move-quality tiers (eval swing thresholds, negative = good for player)
   const QUALITY_TIERS = [
     { name: 'brilliant', threshold: -9,   label: 'BRILLIANT!' },
@@ -135,12 +141,10 @@ const Game = (() => {
     const type = PIECE_DIST[Math.floor(Math.random() * PIECE_DIST.length)];
     const piece = addPieceRandPos(type, 2);
     if (!piece) return null;
-    const rand = Math.random();
-    const threshold = blackPieceCount >= 5 ? 0.30
-                    : blackPieceCount === 4 ? 0.45
-                    : blackPieceCount === 3 ? 0.60
-                    : 0.75;
-    if (rand < threshold) piece.convertable = true;
+    // Star probability: linear inverse 0.75 (1 player piece) → 0 (5+ pieces)
+    const bp = Math.max(1, blackPieceCount);
+    const threshold = Math.max(0, 0.75 * (1 - (bp - 1) / 4));
+    if (Math.random() < threshold) piece.convertable = true;
     return piece;
   }
 
@@ -183,19 +187,69 @@ const Game = (() => {
     isInGame = true;
     engine = new ChessEngine();
 
-    addPieceRandPos('P', 0);
+    // --- Player starting pieces ---
+    // Option A (50%): Pawn + Queen or Rook
+    // Option B (50%): 2 pieces from {Knight, Bishop, King} — no 2 Kings;
+    //                 if both Bishops, place them on opposite-colored squares
+    if (Math.random() < 0.5) {
+      // Option A
+      addPieceRandPos('P', 0);
+      addPieceRandPos(Math.random() < 0.5 ? 'Q' : 'R', 0);
+    } else {
+      // Option B
+      const pool = ['N', 'B', 'K'];
+      const p1 = pool[Math.floor(Math.random() * 3)];
+      let p2;
+      do {
+        p2 = pool[Math.floor(Math.random() * 3)];
+      } while (p1 === 'K' && p2 === 'K');  // no 2 Kings
 
-    
-    const extraBlackType = PIECE_DIST[Math.floor(Math.random() * PIECE_DIST.length)].toUpperCase();
-    addPieceRandPos(extraBlackType, 0);
-    
-    
+      const placed1 = addPieceRandPos(p1, 0);
 
-    addRandomOppPiece();
-    if (Math.random() < 0.6) addRandomOppPiece();
-    if (Math.random() < 0.3) addRandomOppPiece();
+      if (p1 === 'B' && p2 === 'B' && placed1) {
+        // Force opposite-color square for the second bishop
+        const targetParity = 1 - ((placed1.x + placed1.y) % 2);
+        let ox, oy, att = 0;
+        do {
+          ox = Math.floor(Math.random() * 8);
+          oy = Math.floor(Math.random() * 8);
+          att++;
+        } while ((board[ox][oy] !== '' || (ox + oy) % 2 !== targetParity) && att < 64);
+        if (board[ox][oy] === '') createPiece(ox, oy, 'B', 0);
+      } else {
+        addPieceRandPos(p2, 0);
+      }
+    }
+
+    // --- Opponent starting pieces (mirrored player logic) ---
+    // Option A (50%): pawn + queen or rook
+    // Option B (50%): 2 from {knight, bishop, king}
+    if (Math.random() < 0.5) {
+      addPieceRandPos('p', 2);
+      addPieceRandPos(Math.random() < 0.5 ? 'q' : 'r', 2);
+    } else {
+      const oppPool = ['n', 'b', 'k'];
+      const op1 = oppPool[Math.floor(Math.random() * 3)];
+      let op2;
+      do { op2 = oppPool[Math.floor(Math.random() * 3)]; }
+      while (op1 === 'k' && op2 === 'k');
+      const oppPlaced1 = addPieceRandPos(op1, 2);
+      if (op1 === 'b' && op2 === 'b' && oppPlaced1) {
+        const tgt = 1 - ((oppPlaced1.x + oppPlaced1.y) % 2);
+        let ox2, oy2, att2 = 0;
+        do {
+          ox2 = Math.floor(Math.random() * 8);
+          oy2 = Math.floor(Math.random() * 8);
+          att2++;
+        } while ((board[ox2][oy2] !== '' || (ox2 + oy2) % 2 !== tgt) && att2 < 64);
+        if (board[ox2][oy2] === '') createPiece(ox2, oy2, 'b', 2);
+      } else {
+        addPieceRandPos(op2, 2);
+      }
+    }
 
     if (cb.onStateChange) cb.onStateChange();
+    if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum);
     save();
   }
 
@@ -306,8 +360,11 @@ const Game = (() => {
       if (bestMove) {
         setTimeout(() => doEngineMove(bestMove), 500);
       } else {
-        // No white pieces left — run spawn/bonus logic directly
-        setTimeout(() => postMoveSpawn(true), 500);
+        // getBestMove returns null both when no white pieces exist AND when all
+        // white pieces are still forming (movesUntilFormed > 0). Only award the
+        // "cleared" bonus if white pieces are truly absent from the board.
+        const reallyCleared = boardCopy.every(col => col.every(c => c === '' || isBlack(c)));
+        setTimeout(() => postMoveSpawn(reallyCleared), 500);
       }
     }
   }
@@ -347,11 +404,12 @@ const Game = (() => {
       addRandomOppPiece(bp);
       if (Math.random() < 0.6) addRandomOppPiece(bp);
     } else {
-      // Normal spawning — higher probabilities to keep the board active
-      if (wp < 10 && Math.random() < 0.60) addRandomOppPiece(bp);
-      if (wp < 6  && Math.random() < 0.65) addRandomOppPiece(bp);
-      if (wp < 3  && Math.random() < 0.80) addRandomOppPiece(bp);
-      if (wp < 2  && Math.random() < 0.85) addRandomOppPiece(bp);
+      // Spawn rate = OPP_SPAWN_PROBS × evalFactor.
+      // evalFactor is inversely proportional to how badly the player is doing:
+      // lastTurnEngineEval > 0 → white ahead (bad for player) → fewer spawns.
+      const evalFactor = Math.max(0.1, Math.min(1.0, 1.0 - lastTurnEngineEval / 10));
+      const idx = Math.min(wp, OPP_SPAWN_PROBS.length - 1);
+      if (Math.random() < OPP_SPAWN_PROBS[idx] * evalFactor) addRandomOppPiece(bp);
     }
 
     canMovePieces = true;
