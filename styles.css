@@ -8,22 +8,12 @@
 
 html, body {
   height: 100%;
-  background: #2d1408;
+  background: #ffffff;
   display: flex;
   justify-content: center;
   align-items: center;
   font-family: 'Times New Roman', Times, serif;
   overflow: hidden;
-}
-
-/* Wood background canvas */
-#woodBg {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  pointer-events: none;
 }
 
 /* App wrapper */
@@ -49,9 +39,9 @@ html, body {
 #gameTitle {
   font-size: 2.6rem;
   font-weight: bold;
-  color: #f5e6c8;
+  color: #1a1a1a;
   font-family: 'Times New Roman', Times, serif;
-  text-shadow: 1px 3px 10px rgba(0,0,0,0.9);
+  text-shadow: none;
   white-space: nowrap;
   margin: 0;
   letter-spacing: 0.03em;
@@ -77,25 +67,24 @@ html, body {
   width: 100%;
   max-width: 600px;
   display: flex;
-  justify-content: center;
+  justify-content: space-evenly;
   align-items: flex-start;
-  gap: 0;
-  padding: 4px 12px 8px;
+  padding: 4px 0 8px;
 }
 
 .score-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 4px 18px;
-  min-width: 90px;
+  padding: 4px 8px;
+  min-width: 80px;
 }
 
 .score-title {
   font-size: 0.82rem;
   font-weight: normal;
   letter-spacing: 0.18em;
-  color: #c8a87a;
+  color: #777;
   text-transform: uppercase;
   margin-bottom: 1px;
 }
@@ -106,12 +95,12 @@ html, body {
 #moveLabel {
   font-size: 3rem;
   font-weight: bold;
-  color: #f5e6c8;
+  color: #1a1a1a;
   line-height: 1;
   font-family: 'Times New Roman', Times, serif;
   min-width: 50px;
   text-align: center;
-  text-shadow: 1px 2px 8px rgba(0,0,0,0.65);
+  text-shadow: none;
 }
 
 #clockLabel.hidden { display: none; }
@@ -131,8 +120,8 @@ html, body {
 /* HUD icon buttons (? and ☰) */
 .hud-btn {
   background: transparent;
-  border: 2px solid #f5e6c8;
-  color: #f5e6c8;
+  border: 2px solid #333;
+  color: #1a1a1a;
   font-size: 1.6rem;
   font-weight: bold;
   font-family: 'Times New Roman', Times, serif;
@@ -148,7 +137,7 @@ html, body {
   transition: background 0.15s;
   text-shadow: none;
 }
-.hud-btn:hover { background: rgba(245,230,200,0.18); }
+.hud-btn:hover { background: rgba(0,0,0,0.07); }
 
 /* Banner */
 .banner {
@@ -183,7 +172,7 @@ html, body {
 
 .panel {
   background: #1a1a1a;
-  border: 1px solid #f5e6c8;
+  border: 1px solid #444;
   border-radius: 6px;
   padding: 36px 44px;
   text-align: center;
@@ -194,7 +183,7 @@ html, body {
 .panel h2 {
   font-size: 2.2rem;
   margin-bottom: 16px;
-  color: #f5e6c8;
+  color: #ffffff;
 }
 
 .panel p {
@@ -245,11 +234,70 @@ html, body {
   #app { gap: 3px; }
   #gameTitle { font-size: 1.7rem; }
   .score-block { min-width: 60px; padding: 4px 8px; }
-  #scoreLabel, #highScoreLabel, #clockLabel, #moveLabel { font-size: 2.1rem; }
+  #scoreLabel, #highScoreLabel, #clockLabel, #moveLabel { font-size: 2.1rem; color: #1a1a1a; }
   .hud-btn { width: 38px; height: 38px; font-size: 1.3rem; }
   .panel { padding: 24px 20px; }
   .panel h2 { font-size: 1.6rem; }
   .banner { font-size: 1.5rem; }
+}
+
+/* ── Dark mode ─────────────────────────────────────────────── */
+html.dark,
+body.dark {
+  background: #2a2a2a;
+}
+body.dark #gameTitle,
+body.dark #scoreLabel,
+body.dark #highScoreLabel,
+body.dark #clockLabel,
+body.dark #moveLabel {
+  color: #e8e8e8;
+}
+body.dark .score-title {
+  color: #aaaaaa;
+}
+body.dark .hud-btn {
+  border-color: #cccccc;
+  color: #e8e8e8;
+}
+body.dark .hud-btn:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+/* ── Settings slider row ────────────────────────────────────── */
+.settings-slider-row {
+  gap: 12px;
+}
+.settings-slider-row label {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+#volumeSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 5px;
+  border-radius: 3px;
+  background: #666;
+  cursor: pointer;
+  outline: none;
+}
+#volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #888;
+  cursor: pointer;
+}
+#volumeSlider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #888;
+  cursor: pointer;
 }
 
 /* Settings option row */

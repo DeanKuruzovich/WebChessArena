@@ -17,51 +17,6 @@
   ctx.scale(DPR, DPR);
 
   // ---------------------------------------------------------------------------
-  // Wood-grain background canvas (full-screen, behind everything)
-  // ---------------------------------------------------------------------------
-  const woodBgEl  = document.getElementById('woodBg');
-  const woodCtx   = woodBgEl.getContext('2d');
-  let   woodT     = 0;
-
-  function resizeWoodBg() {
-    woodBgEl.width  = window.innerWidth;
-    woodBgEl.height = window.innerHeight;
-  }
-  resizeWoodBg();
-
-  function drawWoodBackground(dtSec) {
-    woodT += dtSec * 0.09;
-    const w = woodBgEl.width;
-    const h = woodBgEl.height;
-    // Base fill
-    woodCtx.fillStyle = '#2d1408';
-    woodCtx.fillRect(0, 0, w, h);
-    // Grain lines
-    const numLines = 130;
-    for (let i = 0; i < numLines; i++) {
-      const t   = i / numLines;
-      const y0  = t * h * 1.15 - h * 0.08;
-      const lt  = 10 + 9 * Math.sin(i * 0.31 + woodT * 2.0 + 0.5);
-      const op  = 0.15 + 0.13 * Math.abs(Math.sin(i * 0.47 + woodT * 0.8));
-      woodCtx.beginPath();
-      const segs = 14;
-      for (let s = 0; s <= segs; s++) {
-        const x  = (s / segs) * w;
-        const dy = Math.sin(s * 0.65 + woodT * 1.2 + i * 0.19) * h * 0.022
-                 + Math.sin(s * 0.22 + woodT * 0.6 + i * 0.40) * h * 0.010;
-        if (s === 0) woodCtx.moveTo(x, y0 + dy);
-        else         woodCtx.lineTo(x, y0 + dy);
-      }
-      const r = Math.round(135 + lt);
-      const g = Math.round(58  + lt * 0.5);
-      const b = Math.round(8   + lt * 0.2);
-      woodCtx.strokeStyle = `rgba(${r},${g},${b},${op.toFixed(2)})`;
-      woodCtx.lineWidth   = 1.4 + 0.9 * Math.abs(Math.sin(i * 0.53));
-      woodCtx.stroke();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Asset loading
   // ---------------------------------------------------------------------------
   function loadImage(src) {
@@ -85,8 +40,9 @@
   }
   const sndCapture = loadAudio('Assets/sounds/capture.mp3');
   const sndMove    = loadAudio('Assets/sounds/move-self.mp3');
+  let soundVolume = 0.65;
   function playSound(snd) {
-    try { const s = snd.cloneNode(); s.volume = 0.65; s.play().catch(()=>{}); } catch(e) {}
+    try { const s = snd.cloneNode(); s.volume = soundVolume; s.play().catch(()=>{}); } catch(e) {}
   }
 
   // Sprite sheet: 270×90, 6 cols × 2 rows, each cell 45×45
@@ -526,13 +482,13 @@
   // --- 7. COMBO SYSTEM ---
   let comboCount = 0;
   let comboTimer = 0;
-  const COMBO_TIMEOUT = 4;
+  // comboTimeoutSec comes from FINETUNE.comboTimeoutSec
 
   let comboDisplay = { count: 0, life: 0, scale: 0, t: 0 };
 
   function incrementCombo() {
     comboCount++;
-    comboTimer = COMBO_TIMEOUT;
+    comboTimer = FINETUNE.comboTimeoutSec;
     if (comboCount >= 2) {
       comboDisplay = { count: comboCount, life: 2.5, scale: 0, t: 0 };
     }
@@ -608,7 +564,7 @@
       // Floating score text
       if (info.isPlayerCapture) {
         const pts = Math.floor(info.value * 10);
-        spawnFloatingText(cx, cy - 10, `+${pts}`, '#FFD93D', 16 + Math.min(info.value * 2, 10));
+        spawnFloatingText(cx, cy - 10, `+${pts}`, '#111111', 16 + Math.min(info.value * 2, 10));
       }
       // Combo
       if (info.isPlayerCapture) {
@@ -636,17 +592,9 @@
       // move-quality banners disabled — score bonuses still applied in game.js
     },
 
-    onClearBoard: (bonus) => {
-      // All opponent pieces wiped — big celebration
-      triggerFlash('#FFD700', 0.45);
-      triggerShake(14);
-      spawnSplashText(`CLEARED! +${bonus}`, '#FFD700', 44);
-      spawnParticles(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 60,
-        ['#FFD700', '#FF6B6B', '#6BCB77', '#4D96FF', '#CC5DE8', '#FFF'], {
-        speed: 280, sizeMin: 3, sizeMax: 9, gravity: 40, upBias: 60,
-      });
-      spawnShockwave(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 200, '#FFD700');
-      setTimeout(() => spawnShockwave(CANVAS_LOGICAL / 2, CANVAS_LOGICAL / 2, 150, '#FFF'), 150);
+    onTurnStart: () => {
+      // Record when it becomes the player's turn so move-time bonus can be computed
+      moveStartTime = performance.now();
     },
 
     onScoreChange: (score, hs, moves) => {
@@ -667,6 +615,9 @@
       if (moveEl) moveEl.textContent = `Moves: ${moves}`;
     },
   });
+
+  // Move-start time: reset each time it becomes the player's turn (via onTurnStart callback)
+  let moveStartTime = performance.now();
 
   // ---------------------------------------------------------------------------
   // Load save or fresh start
@@ -734,13 +685,14 @@
       ctx.globalAlpha = p.alpha;
       drawPieceSprite(p.type, cx - sz / 2, cy - sz / 2, sz, sz);
 
-      // Sparkle indicator on convertable pieces — big corner star
+      // Sparkle indicator on convertable pieces — top-right corner badge
       if (p.convertable) {
         const pulse = 0.7 + 0.3 * Math.sin(now / 280);
         ctx.globalAlpha = p.alpha * pulse;
         if (sparkleImg) {
-          const spSz = sz * 1.05;  // large star covers the corner
-          ctx.drawImage(sparkleImg, cx + sz * 0.1, cy - sz * 0.72, spSz, spSz);
+          // Place star at the top-right corner of the piece, slightly inset
+          const spSz = sz * 0.72;
+          ctx.drawImage(sparkleImg, cx + sz * 0.2-45, cy - sz * 0.65+6, spSz*1.4, spSz*1.4);
         } else {
           ctx.globalAlpha = 0.9;
           ctx.fillStyle = '#FFD700';
@@ -811,7 +763,6 @@
     updateCombo(dtSec);
     updateScoreDisplay(dtSec);
     updateClock(dtSec);
-    drawWoodBackground(dtSec);
 
     // --- Apply screen shake transform ---
     const [sx, sy] = getShakeOffset();
@@ -943,6 +894,27 @@
 
     if (!Game.isValidMove(startX, startY, toCol, toRow)) return;
 
+    // --- Move-time score bonus (piecewise-linear) ---
+    const elapsedSec = (performance.now() - moveStartTime) / 1000;
+    const tb = FINETUNE.moveTimeBonus;
+    let timeBonus;
+    if (elapsedSec <= tb.fastSec) {
+      timeBonus = tb.fastBonus;
+    } else if (elapsedSec <= tb.midSec) {
+      timeBonus = tb.fastBonus + (tb.midBonus - tb.fastBonus) * (elapsedSec - tb.fastSec) / (tb.midSec - tb.fastSec);
+    } else if (elapsedSec <= tb.slowSec) {
+      timeBonus = tb.midBonus + (tb.slowBonus - tb.midBonus) * (elapsedSec - tb.midSec) / (tb.slowSec - tb.midSec);
+    } else {
+      timeBonus = tb.slowBonus;
+    }
+    timeBonus = Math.round(timeBonus);
+
+    // Reset combo if move was too slow
+    if (elapsedSec >= FINETUNE.comboTimeoutSec) {
+      comboCount = 0;
+      comboTimer = 0;
+    }
+
     // Detect en passant
     const isEP = piece.type.toLowerCase() === 'p' &&
                  toCol !== startX &&
@@ -953,6 +925,11 @@
       showPromotionMenu(startX, startY, toCol, toRow, isEP);
       return; // wait for menu selection
     }
+
+    // Apply bonus and show floating text
+    Game.addBonusScore(timeBonus);
+    const [bonusX, bonusY] = boardToCanvas(toCol, toRow);
+    spawnFloatingText(bonusX, bonusY - SQUARE * 0.6, `+${timeBonus}`, '#111111', 13);
 
     Game.onPieceMoved(startX, startY, toCol, toRow, isEP);
     // Cancel slide animation — piece was already dragged visually to destination
@@ -1012,6 +989,18 @@
       document.getElementById('helpPanel').classList.add('hidden');
   });
 
+  // Volume slider
+  document.getElementById('volumeSlider').addEventListener('input', (e) => {
+    soundVolume = parseFloat(e.target.value);
+  });
+
+  // Dark mode toggle
+  document.getElementById('darkModeCheck').addEventListener('change', (e) => {
+    const on = e.target.checked;
+    document.body.classList.toggle('dark', on);
+    document.documentElement.classList.toggle('dark', on);
+  });
+
   // Clock toggle in settings
   document.getElementById('showClockCheck').addEventListener('change', (e) => {
     showClock = e.target.checked;
@@ -1059,7 +1048,6 @@
     const maxPx   = Math.min(window.innerWidth, window.innerHeight - 130, 600);
     canvas.style.width  = maxPx + 'px';
     canvas.style.height = maxPx + 'px';
-    resizeWoodBg();
   }
   window.addEventListener('resize', resize);
   resize();

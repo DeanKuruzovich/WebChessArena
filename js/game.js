@@ -8,14 +8,17 @@ const Game = (() => {
 
   const { isBlack, isWhite, getPieceValue, getMoves, getAllMovesPlayer, ChessEngine } = Engine;
 
-  // White-piece spawn distribution (lowercase = white AI pieces)
-  const PIECE_DIST = ['p','p','p','p','p','p','k','q','r','r','n','n','n','b','b','b'];
-
-  // Probability to spawn a new opponent piece based on current white-piece count.
-  // Index = current white-piece count (capped at array length - 1).
-  // 5 slots so it’s easy to fine-tune each level:
-  //  index 0 = 0 pieces on board, index 1 = 1 piece, … index 4 = 4+ pieces
-  const OPP_SPAWN_PROBS = [1.00, 0.80, 0.60, 0.40, 0.20];
+  // Weighted random piece-type sampler — builds a distribution from { type: weight } objects.
+  function weightedRandom(weights) {
+    const types = Object.keys(weights);
+    const total = types.reduce((sum, t) => sum + weights[t], 0);
+    let r = Math.random() * total;
+    for (const t of types) {
+      r -= weights[t];
+      if (r <= 0) return t;
+    }
+    return types[types.length - 1];
+  }
 
   // Move-quality tiers (eval swing thresholds, negative = good for player)
   const QUALITY_TIERS = [
@@ -51,7 +54,7 @@ const Game = (() => {
     onPieceMove    : null,   // ({wasCapture}) — fires for every completed move
     onPromotion    : null,
     onScoreChange  : null,
-    onClearBoard   : null,   // (bonusScore) — all opponent pieces wiped
+    onTurnStart    : null,   // fires when it is the player's turn to move
   };
 
   // ---------------------------------------------------------------------------
@@ -95,6 +98,7 @@ const Game = (() => {
   // Piece creation
   // ---------------------------------------------------------------------------
   function createPiece(x, y, type, movesUntilFormed = 0, convertable = false) {
+    
     if (x < 0 || x > 7 || y < 0 || y > 7) return null;
     if (board[x][y] !== '') return null;
     const piece = {
@@ -138,13 +142,22 @@ const Game = (() => {
   }
 
   function addRandomOppPiece(blackPieceCount = 5) {
-    const type = PIECE_DIST[Math.floor(Math.random() * PIECE_DIST.length)];
+    const type  = weightedRandom(FINETUNE.oppPieceWeights);
     const piece = addPieceRandPos(type, 2);
     if (!piece) return null;
-    // Star probability: linear inverse 0.75 (1 player piece) → 0 (5+ pieces)
-    const bp = Math.max(1, blackPieceCount);
-    const threshold = Math.max(0, 0.75 * (1 - (bp - 1) / 4));
-    if (Math.random() < threshold) piece.convertable = true;
+    // Star (convertable) probability:
+    //   base + eval/divisor (player losing → eval>0 → more stars to help recovery)
+    //         - piece-count penalty (more black pieces = fewer stars needed)
+    const bp   = Math.max(1, blackPieceCount);
+    const prob = Math.max(
+      FINETUNE.starMinProb,
+      Math.min(FINETUNE.starMaxProb,
+        FINETUNE.starBaseProb
+        + lastTurnEngineEval / FINETUNE.evalStarDivisor
+        - (bp - 1) * FINETUNE.starPieceScale
+      )
+    );
+    if (Math.random() < prob) piece.convertable = true;
     return piece;
   }
 
@@ -394,25 +407,49 @@ const Game = (() => {
     const wp = countPieces(true);
     const bp = countPieces(false);
 
-    if (clearedBoard || wp === 0) {
-      // All opponent pieces cleared — give bonus and guaranteed fresh wave
-      const bonus = 100;
-      addScore(bonus);
-      if (cb.onClearBoard) cb.onClearBoard(bonus);
-      // Spawn a proper fresh wave (2-3 pieces)
+    // ---------------------------------------------------------------------------
+    // Equilibrium spawning:
+    //   Player winning (eval < 0)  →  evalFactor > 1  →  more enemies, fewer stars
+    //   Player losing  (eval > 0)  →  evalFactor < 1  →  fewer enemies, more stars
+    // ---------------------------------------------------------------------------
+    const evalFactor = Math.max(
+      FINETUNE.minSpawnFactor,
+      Math.min(FINETUNE.maxSpawnFactor,
+        1.0 - lastTurnEngineEval / FINETUNE.evalSpawnDivisor
+      )
+    );
+
+    if (wp === 0) {
+      // Board just emptied — re-populate quietly (no bonus, no VFX)
       addRandomOppPiece(bp);
       addRandomOppPiece(bp);
-      if (Math.random() < 0.6) addRandomOppPiece(bp);
+      if (Math.random() < 0.55 * evalFactor) addRandomOppPiece(bp);
     } else {
-      // Spawn rate = OPP_SPAWN_PROBS × evalFactor.
-      // evalFactor is inversely proportional to how badly the player is doing:
-      // lastTurnEngineEval > 0 → white ahead (bad for player) → fewer spawns.
-      const evalFactor = Math.max(0.1, Math.min(1.0, 1.0 - lastTurnEngineEval / 10));
-      const idx = Math.min(wp, OPP_SPAWN_PROBS.length - 1);
-      if (Math.random() < OPP_SPAWN_PROBS[idx] * evalFactor) addRandomOppPiece(bp);
+      const idx = Math.min(wp, FINETUNE.oppSpawnProbs.length - 1);
+      if (Math.random() < FINETUNE.oppSpawnProbs[idx] * evalFactor) addRandomOppPiece(bp);
+    }
+
+    // -------------------------------------------------------------------------
+    // "Miracle" spawn: if player has exactly ONE piece and it isn't a Queen,
+    // 45% chance a convertable piece appears on one of its attack squares.
+    // -------------------------------------------------------------------------
+    const activePieces = pieces.filter(p => isBlack(p.type) && p.movesUntilFormed === 0);
+    if (activePieces.length === 1 && activePieces[0].type !== 'Q') {
+      if (Math.random() < FINETUNE.miracleProb) {
+        const hero = activePieces[0];
+        const attacks = getMoves(hero.x, hero.y, board, enPassantTarget);
+        const emptyAttacks = attacks.filter(([ax, ay]) => board[ax][ay] === '');
+        if (emptyAttacks.length > 0) {
+          const [sx, sy] = emptyAttacks[Math.floor(Math.random() * emptyAttacks.length)];
+          const mType = weightedRandom(FINETUNE.oppPieceWeights);
+          const mp = createPiece(sx, sy, mType, 2);
+          if (mp) mp.convertable = true;
+        }
+      }
     }
 
     canMovePieces = true;
+    if (cb.onTurnStart) cb.onTurnStart();
     if (cb.onStateChange) cb.onStateChange();
     save();
   }
@@ -550,6 +587,9 @@ const Game = (() => {
     setCallbacks(callbacks) {
       Object.assign(cb, callbacks);
     },
+
+    // Inject a score bonus from outside (e.g. move-time bonus from main.js)
+    addBonusScore(pts) { addScore(pts); },
   };
 
 })();

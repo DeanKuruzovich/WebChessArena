@@ -8,9 +8,6 @@
 </head>
 <body>
 
-<!-- Full-screen dynamic wood-grain background (drawn by main.js) -->
-<canvas id="woodBg"></canvas>
-
 <div id="app">
 
   <!-- Top bar: title left, buttons right -->
@@ -79,6 +76,18 @@
         <label for="showClockCheck">Show Clock</label>
       </div>
 
+      <!-- Dark Mode Toggle -->
+      <div class="settings-option">
+        <input type="checkbox" id="darkModeCheck" />
+        <label for="darkModeCheck">Dark Mode</label>
+      </div>
+
+      <!-- Volume Slider -->
+      <div class="settings-option settings-slider-row">
+        <label for="volumeSlider">&#128266;</label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.65" />
+      </div>
+
       <div style="margin-top:18px;">
         <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
         <button id="creditsBtn" class="btn btn-secondary">Credits</button><br/>
@@ -123,7 +132,8 @@
 
 </div>
 
-<!-- Load order matters: engine → game → main -->
+<!-- Load order matters: finetune -> engine -> game -> main -->
+<script src="js/finetune.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/game.js"></script>
 <script src="js/main.js"></script>
