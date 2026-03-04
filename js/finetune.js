@@ -48,7 +48,7 @@ const FINETUNE = {
   // ---------------------------------------------------------------------------
   starBaseProb   : 0.28,
   evalStarDivisor: 8,
-  starPieceScale : 0.05,   // subtract this per extra black piece (1 piece = base, 5 = base-4*scale)
+  starPieceScale : 0.1,   // subtract this per extra black piece (1 piece = base, 5 = base-4*scale)
   starMinProb    : 0.3,
   starMaxProb    : 0.90,
 
@@ -105,13 +105,13 @@ const FINETUNE = {
   // this is the probability that a convertable piece spawns on one of its
   // attack squares each turn.
   // ---------------------------------------------------------------------------
-  miracleProb: 0.2,
+  miracleProb: 1,
 
   // ---------------------------------------------------------------------------
   // Debug HUD toggle:
   //   1 / true  -> show engine eval in corner
   //   0 / false -> hide debug eval
   // ---------------------------------------------------------------------------
-  debugShowEngineEval: 0,
+  debugShowEngineEval: 1,
 
 };

@@ -52,7 +52,7 @@ const Game = (() => {
     onGameOver     : null,
     onMoveQuality  : null,
     onCapture      : null,
-    onPieceMove    : null,   // ({wasCapture}) — fires for every completed move
+    onPieceMove    : null,   // ({wasCapture, isPlayerMove}) — fires for every completed move
     onPromotion    : null,
     onScoreChange  : null,
     onTurnStart    : null,   // fires when it is the player's turn to move
@@ -354,7 +354,7 @@ const Game = (() => {
     // has already moved) so a piece can never activate AND move in the same turn.
 
     if (cb.onStateChange) cb.onStateChange();
-    if (cb.onPieceMove) cb.onPieceMove({ wasCapture });
+    if (cb.onPieceMove) cb.onPieceMove({ wasCapture, isPlayerMove: isBlack(board[toX][toY]) });
 
     // --- If the player (black) just moved, schedule engine response ---
     if (isBlack(board[toX][toY])) {
@@ -408,12 +408,14 @@ const Game = (() => {
     }
 
     // Game-over check (no black pieces or no legal moves)
-    // Forming player pieces cannot move yet — don't trigger game over just because
-    // only forming pieces remain; wait until they develop before judging stalemate.
+    // Pass an all-zeros awakeness map so that forming (developing) player pieces
+    // are treated as fully active for the purpose of this check. This prevents
+    // a false game-over when the only player pieces left are still developing —
+    // they WILL have moves once they finish forming, so keep playing.
     const blackPieces = countPieces(false);
-    const awk = makeAwakenessMap();
-    const formingBlackPieces = pieces.filter(p => isBlack(p.type) && p.movesUntilFormed > 0).length;
-    if (blackPieces === 0 || (formingBlackPieces === 0 && getAllMovesPlayer(board, awk, true, enPassantTarget).length === 0)) {
+    const allActiveMap = Array.from({length: 8}, () => new Array(8).fill(0));
+    const anyMoveIfFullyActive = getAllMovesPlayer(board, allActiveMap, true, enPassantTarget).length > 0;
+    if (blackPieces === 0 || !anyMoveIfFullyActive) {
       isInGame = false;
       canMovePieces = false;
       save();
@@ -447,20 +449,59 @@ const Game = (() => {
     }
 
     // -------------------------------------------------------------------------
-    // "Miracle" spawn: if player has exactly ONE piece and it isn't a Queen,
-    // 45% chance a convertable piece appears on one of its attack squares.
+    // "Miracle" spawn: a lifeline for the player when all hope is lost.
+    //
+    // Triggers when ALL of the following are true:
+    //   1. Player has exactly ONE active (non-forming) piece and it isn't a Queen
+    //   2. That piece cannot already capture any existing ★ (convertable) pieces
+    //   3. The opponent is a serious threat:
+    //        - more than 2 enemy pieces, OR
+    //        - 2+ enemy pieces including at least one queen or rook
+    //
+    // Effect (with probability FINETUNE.miracleProb):
+    //   A new ★ opponent piece spawns on a square that:
+    //     - the hero piece can legally move to
+    //     - is NOT currently attacked by any enemy piece (safe landing)
+    //   Spawns with the normal forming delay so the player sees it coming.
     // -------------------------------------------------------------------------
     const activePieces = pieces.filter(p => isBlack(p.type) && p.movesUntilFormed === 0);
     if (activePieces.length === 1 && activePieces[0].type !== 'Q') {
-      if (Math.random() < FINETUNE.miracleProb) {
-        const hero = activePieces[0];
-        const attacks = getMoves(hero.x, hero.y, board, enPassantTarget);
-        const emptyAttacks = attacks.filter(([ax, ay]) => board[ax][ay] === '');
-        if (emptyAttacks.length > 0) {
-          const [sx, sy] = emptyAttacks[Math.floor(Math.random() * emptyAttacks.length)];
-          const mType = weightedRandom(FINETUNE.oppPieceWeights);
-          const mp = createPiece(sx, sy, mType, FINETUNE.formingMoves);
-          if (mp) mp.convertable = true;
+      const hero = activePieces[0];
+
+      // Condition 2: can the hero already reach a ★ piece this turn?
+      const heroMoves = getMoves(hero.x, hero.y, board, enPassantTarget);
+      const canAlreadyTakeStar = heroMoves.some(([mx, my]) => {
+        const target = pieces.find(p => p.x === mx && p.y === my && !isBlack(p.type));
+        return target && target.convertable;
+      });
+
+      if (!canAlreadyTakeStar) {
+        // Condition 3: is the opponent a serious threat?
+        const enemyPieces = pieces.filter(p => isWhite(p.type));
+        const isThreatening = enemyPieces.length > 2 ||
+          (enemyPieces.length >= 2 &&
+           enemyPieces.some(p => p.type === 'q' || p.type === 'r'));
+
+        if (isThreatening && Math.random() < FINETUNE.miracleProb) {
+          // Collect all squares currently attacked by enemy pieces
+          const enemyAttacked = new Set();
+          for (const ep of enemyPieces) {
+            for (const [mx, my] of getMoves(ep.x, ep.y, board, enPassantTarget)) {
+              enemyAttacked.add(`${mx},${my}`);
+            }
+          }
+
+          // Candidate squares: hero can legally move there, empty, not enemy-attacked
+          const candidates = heroMoves.filter(([mx, my]) =>
+            board[mx][my] === '' && !enemyAttacked.has(`${mx},${my}`)
+          );
+
+          if (candidates.length > 0) {
+            const [sx, sy] = candidates[Math.floor(Math.random() * candidates.length)];
+            const mType = weightedRandom(FINETUNE.oppPieceWeights);
+            const mp = createPiece(sx, sy, mType, FINETUNE.formingMoves);
+            if (mp) mp.convertable = true;
+          }
         }
       }
     }

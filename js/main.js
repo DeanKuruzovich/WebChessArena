@@ -497,6 +497,12 @@
     }
   }
 
+  function resetCombo() {
+    comboCount = 0;
+    comboTimer = 0;
+    comboDisplay = { count: 0, life: 0, scale: 0, t: 0 };
+  }
+
   function updateCombo(dtSec) {
     if (comboTimer > 0) {
       comboTimer -= dtSec;
@@ -671,8 +677,11 @@
       }
     },
 
-    onPieceMove: ({ wasCapture }) => {
-      if (!wasCapture) playSound(sndMove);
+    onPieceMove: ({ wasCapture, isPlayerMove }) => {
+      if (!wasCapture) {
+        playSound(sndMove);
+        if (isPlayerMove) resetCombo();
+      }
     },
 
     onPromotion: (info) => {
