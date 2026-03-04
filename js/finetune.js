@@ -13,6 +13,18 @@ const FINETUNE = {
   oppSpawnProbs: [1.00, 0.80, 0.60, 0.40, 0.20],
 
   // ---------------------------------------------------------------------------
+  // Piece forming (ghost state before becoming active).
+  //   formingMoves  — how many full player turns a newly-spawned opponent piece
+  //                   stays locked (can't be moved by the engine).
+  //   formingAlpha  — opacity of the ghost piece during that window.
+  // The piece's alpha jumps to 1.0 at the END of the forming turn (inside
+  // postMoveSpawn), so the player always sees the fully-solid piece at the start
+  // of the turn when it first becomes active.
+  // ---------------------------------------------------------------------------
+  formingMoves : 2,
+  formingAlpha : 0.40,
+
+  // ---------------------------------------------------------------------------
   // Eval-based equilibrium:
   //   lastTurnEngineEval > 0  →  white (engine) is ahead  →  player is losing
   //   lastTurnEngineEval < 0  →  white (engine) is behind →  player is winning
@@ -25,7 +37,7 @@ const FINETUNE = {
   // ---------------------------------------------------------------------------
   evalSpawnDivisor: 8,
   minSpawnFactor  : 0.10,
-  maxSpawnFactor  : 2.20,
+  maxSpawnFactor  : 2,
 
   // ---------------------------------------------------------------------------
   // Star (convertable piece) probability:
@@ -37,7 +49,7 @@ const FINETUNE = {
   starBaseProb   : 0.28,
   evalStarDivisor: 8,
   starPieceScale : 0.05,   // subtract this per extra black piece (1 piece = base, 5 = base-4*scale)
-  starMinProb    : 0.0,
+  starMinProb    : 0.3,
   starMaxProb    : 0.90,
 
   // ---------------------------------------------------------------------------
@@ -61,10 +73,10 @@ const FINETUNE = {
   playerPieceWeights: {
     P: 4.0,
     N: 2.0,
-    B: 2.0,
-    R: 2.0,
-    Q: 1.0,
-    K: 1.0,
+    B: 1.8,
+    R: 1.5,
+    Q: 0.6,
+    K: 1,
   },
 
   // ---------------------------------------------------------------------------
@@ -74,11 +86,11 @@ const FINETUNE = {
   //   > slowSec  →  slowBonus  (+1  for 30+ sec)
   // ---------------------------------------------------------------------------
   moveTimeBonus: {
-    fastSec  : 1.0,
+    fastSec  : 1.5,
     fastBonus: 10,
     midSec   : 5.0,
     midBonus : 5,
-    slowSec  : 30.0,
+    slowSec  : 10,
     slowBonus: 1,
   },
 
@@ -86,13 +98,20 @@ const FINETUNE = {
   // Combo: reset combo counter if player spends more than this many seconds
   // on a single move.
   // ---------------------------------------------------------------------------
-  comboTimeoutSec: 8,
+  comboTimeoutSec: 5,
 
   // ---------------------------------------------------------------------------
   // "Miracle" spawn: when the player has exactly ONE piece and it is not a Queen,
   // this is the probability that a convertable piece spawns on one of its
   // attack squares each turn.
   // ---------------------------------------------------------------------------
-  miracleProb: 0.45,
+  miracleProb: 0.2,
+
+  // ---------------------------------------------------------------------------
+  // Debug HUD toggle:
+  //   1 / true  -> show engine eval in corner
+  //   0 / false -> hide debug eval
+  // ---------------------------------------------------------------------------
+  debugShowEngineEval: 0,
 
 };

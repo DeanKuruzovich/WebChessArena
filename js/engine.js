@@ -12,7 +12,7 @@ const Engine = (() => {
 
   const MAX_DEPTH = 3;
 
-  const PIECE_VALUES = { p: 1.0, r: 4.79, n: 2.80, b: 3.20, q: 9.29, k: 4.0 };
+  const PIECE_VALUES = { p: 1.5, r: 4.79, n: 2.40, b: 3.20, q: 9.29, k: 3.0 };
 
   // ---------------------------------------------------------------------------
   // Helpers (mirrors Global.gd)
@@ -418,6 +418,11 @@ const Engine = (() => {
           }
         }
       return w - b;
+    }
+
+    // Public: compute current material eval (white − black) for display
+    evaluate(board) {
+      return this._computeMaterial(board);
     }
 
     // Build 8×8 awake map from pieces array

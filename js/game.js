@@ -38,6 +38,7 @@ const Game = (() => {
   let canMovePieces    = true;
   let score            = 0;
   let highScore        = 0;
+  let killCount        = 0;
   let moveNum          = 0;
   let isInGame         = false;
   let lastTurnEngineEval = 0;
@@ -94,6 +95,8 @@ const Game = (() => {
     return map;
   }
 
+
+
   // ---------------------------------------------------------------------------
   // Piece creation
   // ---------------------------------------------------------------------------
@@ -103,7 +106,7 @@ const Game = (() => {
     if (board[x][y] !== '') return null;
     const piece = {
       x, y, type, movesUntilFormed, convertable,
-      alpha   : movesUntilFormed > 0 ? 1.0 / (movesUntilFormed*3 + 1) : 1.0,
+      alpha   : movesUntilFormed > 0 ? FINETUNE.formingAlpha : 1.0,
       animating: false,
       animFromX: x, animFromY: y,
       animToX  : x, animToY  : y,
@@ -143,7 +146,7 @@ const Game = (() => {
 
   function addRandomOppPiece(blackPieceCount = 5) {
     const type  = weightedRandom(FINETUNE.oppPieceWeights);
-    const piece = addPieceRandPos(type, 2);
+    const piece = addPieceRandPos(type, FINETUNE.formingMoves);
     if (!piece) return null;
     // Star (convertable) probability:
     //   base + eval/divisor (player losing → eval>0 → more stars to help recovery)
@@ -167,7 +170,7 @@ const Game = (() => {
   function addScore(delta) {
     score += delta;
     if (score > highScore) highScore = score;
-    if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum);
+    if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum, killCount);
   }
 
   // ---------------------------------------------------------------------------
@@ -191,6 +194,7 @@ const Game = (() => {
     emptyBoard();
     pieces = [];
     score = 0;
+    killCount = 0;
     moveNum = 0;
     enPassantTarget = [-1, -1];
     canMovePieces = true;
@@ -238,15 +242,15 @@ const Game = (() => {
     // Option A (50%): pawn + queen or rook
     // Option B (50%): 2 from {knight, bishop, king}
     if (Math.random() < 0.5) {
-      addPieceRandPos('p', 2);
-      addPieceRandPos(Math.random() < 0.5 ? 'q' : 'r', 2);
+      addPieceRandPos('p', FINETUNE.formingMoves);
+      addPieceRandPos(Math.random() < 0.5 ? 'q' : 'r', FINETUNE.formingMoves);
     } else {
       const oppPool = ['n', 'b', 'k'];
       const op1 = oppPool[Math.floor(Math.random() * 3)];
       let op2;
       do { op2 = oppPool[Math.floor(Math.random() * 3)]; }
       while (op1 === 'k' && op2 === 'k');
-      const oppPlaced1 = addPieceRandPos(op1, 2);
+      const oppPlaced1 = addPieceRandPos(op1, FINETUNE.formingMoves);
       if (op1 === 'b' && op2 === 'b' && oppPlaced1) {
         const tgt = 1 - ((oppPlaced1.x + oppPlaced1.y) % 2);
         let ox2, oy2, att2 = 0;
@@ -255,14 +259,14 @@ const Game = (() => {
           oy2 = Math.floor(Math.random() * 8);
           att2++;
         } while ((board[ox2][oy2] !== '' || (ox2 + oy2) % 2 !== tgt) && att2 < 64);
-        if (board[ox2][oy2] === '') createPiece(ox2, oy2, 'b', 2);
+        if (board[ox2][oy2] === '') createPiece(ox2, oy2, 'b', FINETUNE.formingMoves);
       } else {
-        addPieceRandPos(op2, 2);
+        addPieceRandPos(op2, FINETUNE.formingMoves);
       }
     }
 
     if (cb.onStateChange) cb.onStateChange();
-    if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum);
+    if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum, killCount);
     save();
   }
 
@@ -280,6 +284,7 @@ const Game = (() => {
     // --- Score & capture callback: black capturing white ---
     if (board[toX][toY] !== '' && isBlack(pieceType)) {
       wasCapture = true;
+      killCount++;
       addScore(getPieceValue(board[toX][toY]) * 10);
       fireCapture(toX, toY, board[toX][toY], pieceType);
     }
@@ -289,6 +294,7 @@ const Game = (() => {
       const epCapX = toX, epCapY = fromY;
       if (board[epCapX][epCapY] !== '') {
         if (isBlack(pieceType)) {
+          killCount++;
           addScore(getPieceValue(board[epCapX][epCapY]) * 10);
           fireCapture(epCapX, epCapY, board[epCapX][epCapY], pieceType);
           wasCapture = true;
@@ -344,13 +350,8 @@ const Game = (() => {
       }
     }
 
-    // --- Decrement movesUntilFormed for every piece ---
-    for (const p of pieces) {
-      if (p.movesUntilFormed > 0) {
-        p.movesUntilFormed--;
-        p.alpha = p.movesUntilFormed <= 0 ? 1.0 : 1.0 / (p.movesUntilFormed + 1);
-      }
-    }
+    // movesUntilFormed is now decremented in postMoveSpawn (after the engine
+    // has already moved) so a piece can never activate AND move in the same turn.
 
     if (cb.onStateChange) cb.onStateChange();
     if (cb.onPieceMove) cb.onPieceMove({ wasCapture });
@@ -359,7 +360,7 @@ const Game = (() => {
     if (isBlack(board[toX][toY])) {
       lastPlayerMove = { from: [fromX, fromY], to: [toX, toY], piece: board[toX][toY] };
       moveNum++;
-      if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum);
+      if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum, killCount);
       canMovePieces = false;
 
       const boardCopy  = board.map(col => [...col]);
@@ -373,6 +374,8 @@ const Game = (() => {
       if (bestMove) {
         setTimeout(() => doEngineMove(bestMove), 500);
       } else {
+        // No engine move — recompute eval from current board state
+        lastTurnEngineEval = engine.evaluate(board);
         // getBestMove returns null both when no white pieces exist AND when all
         // white pieces are still forming (movesUntilFormed > 0). Only award the
         // "cleared" bonus if white pieces are truly absent from the board.
@@ -387,16 +390,30 @@ const Game = (() => {
   // Called after every engine turn (or immediately when no engine move exists)
   // ---------------------------------------------------------------------------
   function postMoveSpawn(clearedBoard = false) {
+    // Advance forming pieces now that a full turn has elapsed.
+    // Running BEFORE spawns means newly-placed pieces aren't decremented this turn.
+    // Running AFTER the engine has already evaluated means the engine always saw
+    // movesUntilFormed > 0 and could not have moved these pieces.
+    for (const p of pieces) {
+      if (p.movesUntilFormed > 0) {
+        p.movesUntilFormed--;
+        p.alpha = p.movesUntilFormed <= 0 ? 1.0 : FINETUNE.formingAlpha;
+      }
+    }
+
     // Pending conversion piece (captured convertable)
     if (pendingPlayerPiece !== null) {
-      addPieceRandPos(pendingPlayerPiece, 2);
+      addPieceRandPos(pendingPlayerPiece, FINETUNE.formingMoves);
       pendingPlayerPiece = null;
     }
 
     // Game-over check (no black pieces or no legal moves)
+    // Forming player pieces cannot move yet — don't trigger game over just because
+    // only forming pieces remain; wait until they develop before judging stalemate.
     const blackPieces = countPieces(false);
     const awk = makeAwakenessMap();
-    if (blackPieces === 0 || getAllMovesPlayer(board, awk, true, enPassantTarget).length === 0) {
+    const formingBlackPieces = pieces.filter(p => isBlack(p.type) && p.movesUntilFormed > 0).length;
+    if (blackPieces === 0 || (formingBlackPieces === 0 && getAllMovesPlayer(board, awk, true, enPassantTarget).length === 0)) {
       isInGame = false;
       canMovePieces = false;
       save();
@@ -442,7 +459,7 @@ const Game = (() => {
         if (emptyAttacks.length > 0) {
           const [sx, sy] = emptyAttacks[Math.floor(Math.random() * emptyAttacks.length)];
           const mType = weightedRandom(FINETUNE.oppPieceWeights);
-          const mp = createPiece(sx, sy, mType, 2);
+          const mp = createPiece(sx, sy, mType, FINETUNE.formingMoves);
           if (mp) mp.convertable = true;
         }
       }
@@ -468,8 +485,9 @@ const Game = (() => {
           break;
         }
       }
-      lastTurnEngineEval = engineMove.eval;
     }
+    // Always update eval so debug HUD + spawn balancing stay current
+    lastTurnEngineEval = engineMove.eval;
 
     // --- Update EP target if engine pushed pawn 2 squares ---
     if (engineMove.isTwoSquarePawn) {
@@ -548,6 +566,7 @@ const Game = (() => {
     pendingPlayerPiece = null;
     lastPlayerMove = null;
     score = 0;
+    killCount = 0;
     moveNum = 0;
     lastTurnEngineEval = 0;
     save();
@@ -565,9 +584,11 @@ const Game = (() => {
     get canMovePieces()  { return canMovePieces; },
     get score()          { return score; },
     get highScore()      { return highScore; },
+    get killCount()      { return killCount; },
     get moveNum()        { return moveNum; },
     get isInGame()       { return isInGame; },
     get lastPlayerMove() { return lastPlayerMove; },
+    get lastTurnEngineEval() { return lastTurnEngineEval; },
 
     getMoves(x, y)   { return getMoves(x, y, board, enPassantTarget); },
     isValidMove,

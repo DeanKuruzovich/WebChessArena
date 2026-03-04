@@ -29,7 +29,7 @@
       <div id="scoreLabel">0</div>
     </div>
     <div class="score-block" id="high-block">
-      <div class="score-title">BEST</div>
+      <div class="score-title">MAX</div>
       <div id="highScoreLabel">0</div>
     </div>
     <div class="score-block hidden" id="clock-block">
@@ -44,7 +44,7 @@
       <h2>Game Over</h2>
       <div class="panel-scores">
         <span id="goScore">Score: 0</span>
-        <span id="goHighScore">High Score: 0</span>
+        <span id="goHighScore">Best: 0</span>
       </div>
       <button id="restartFromGameOver" class="btn btn-primary">Play Again</button>
     </div>
@@ -53,11 +53,7 @@
   <!-- Settings / Pause panel -->
   <div id="settingsPanel" class="overlay hidden">
     <div class="panel">
-      <h2>Settings</h2>
-      <p style="margin-bottom:18px;font-size:0.95rem;color:#cccccc;">
-        Capture white pieces for points.<br/>
-        Drag your black pieces to move.
-      </p>
+      
 
       <!-- Piece Colour Toggle -->
       <p class="color-picker-label">Play as</p>
@@ -84,12 +80,13 @@
 
       <!-- Volume Slider -->
       <div class="settings-option settings-slider-row">
-        <label for="volumeSlider">&#128266;</label>
+        <label for="volumeSlider">Volume</label>
         <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.65" />
       </div>
 
       <div style="margin-top:18px;">
         <button id="restartFromMenu" class="btn btn-primary">Restart</button><br/>
+        <button id="statsBtn" class="btn btn-secondary">Stats</button><br/>
         <button id="creditsBtn" class="btn btn-secondary">Credits</button><br/>
         <button id="closeMenuBtn" class="btn btn-secondary">Resume</button>
       </div>
@@ -102,16 +99,47 @@
       <h2>How to Play</h2>
       <div class="help-content">
         <ul>
-          <li><strong>Goal:</strong> Capture white pieces to score points. Survive as long as you can.</li>
-          <li><strong>Your pieces</strong> are black. Drag and drop them to move.</li>
-          <li><strong>Piece values:</strong> Pawn 1, Knight 2.8, Bishop 3.2, Rook 4.8, King 4, Queen 9.3.</li>
-          <li><strong>Convertable pieces</strong> (marked with a ★) join your side when captured.</li>
-          <li><strong>Promotion:</strong> Hold Shift when moving a pawn to the last rank to choose a piece.</li>
-          <li><strong>Clear the board</strong> of all white pieces for a +100 bonus!</li>
-          <li><strong>Game Over</strong> when you have no legal moves left.</li>
+          <li><strong>Goal:</strong> Capture white pieces for points and survive as long as you can.</li>
+          <li><strong>Controls:</strong> Drag and drop your pieces to move.</li>
+          <li><strong>Turns:</strong> You move, then white moves. After that, new white pieces may appear.</li>
+          <li><strong>Forming pieces:</strong> Some newly spawned pieces are “forming” for a few turns and can’t move yet.</li>
+          <li><strong>Scoring:</strong> Captures are worth points based on the piece you take (bigger pieces are worth more).</li>
+          <li><strong>Piece values:</strong> Pawn 1, Knight 2.8, Bishop 3.2, Rook 4.8, King 4, Queen 9.3.</li>
+          <li><strong>Speed bonus:</strong> Faster moves give a small bonus each turn.</li>
+          <li><strong>Promotion:</strong> Reach the last rank with a pawn to promote (hold Shift while moving to choose the piece).</li>
+          <li><strong>★ Convertible pieces:</strong> Capturing a ★ piece adds that piece to your side later (it spawns in and may start forming).</li>
+          <li><strong>Special move:</strong> En passant is allowed.</li>
+          <li><strong>Rules note:</strong> Moves follow piece movement rules, but not all chess rules are enforced.</li>
+          <li><strong>Game Over:</strong> When you have no legal moves left (or no pieces).</li>
         </ul>
       </div>
       <button id="closeHelpBtn" class="btn btn-primary" style="margin-top:8px;">Got it!</button>
+    </div>
+  </div>
+
+  <!-- Stats panel -->
+  <div id="statsPanel" class="overlay hidden">
+    <div class="panel">
+      <h2>Stats</h2>
+      <div class="stats-content">
+        <div class="stats-row">
+          <span class="stats-label">Games Played</span>
+          <span class="stats-value" id="statGames">0</span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">Total Kills</span>
+          <span class="stats-value" id="statKills">0</span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">Best Score</span>
+          <span class="stats-value" id="statMax">0</span>
+        </div>
+        <div class="stats-row">
+          <span class="stats-label">Total Points</span>
+          <span class="stats-value" id="statTotal">0</span>
+        </div>
+      </div>
+      <button id="closeStatsBtn" class="btn btn-primary" style="margin-top:22px;">Close</button>
     </div>
   </div>
 

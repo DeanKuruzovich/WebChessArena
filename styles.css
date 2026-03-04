@@ -90,6 +90,7 @@ html, body {
 }
 
 #scoreLabel,
+#killsLabel,
 #highScoreLabel,
 #clockLabel,
 #moveLabel {
@@ -234,7 +235,7 @@ html, body {
   #app { gap: 3px; }
   #gameTitle { font-size: 1.7rem; }
   .score-block { min-width: 60px; padding: 4px 8px; }
-  #scoreLabel, #highScoreLabel, #clockLabel, #moveLabel { font-size: 2.1rem; color: #1a1a1a; }
+  #scoreLabel, #killsLabel, #highScoreLabel, #clockLabel, #moveLabel { font-size: 2.1rem; color: #1a1a1a; }
   .hud-btn { width: 38px; height: 38px; font-size: 1.3rem; }
   .panel { padding: 24px 20px; }
   .panel h2 { font-size: 1.6rem; }
@@ -244,10 +245,11 @@ html, body {
 /* ── Dark mode ─────────────────────────────────────────────── */
 html.dark,
 body.dark {
-  background: #2a2a2a;
+  background: #202020;
 }
 body.dark #gameTitle,
 body.dark #scoreLabel,
+body.dark #killsLabel,
 body.dark #highScoreLabel,
 body.dark #clockLabel,
 body.dark #moveLabel {
@@ -269,7 +271,7 @@ body.dark .hud-btn:hover {
   gap: 12px;
 }
 .settings-slider-row label {
-  font-size: 1.3rem;
+  font-size: 1rem;
   line-height: 1;
 }
 #volumeSlider {

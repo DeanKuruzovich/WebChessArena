@@ -246,7 +246,10 @@
     for (const ft of floatingTexts) {
       ctx.save();
       ctx.globalAlpha = Math.min(1, ft.life * 2);
-      ctx.font = `bold ${ft.size}px "Segoe UI", Arial, sans-serif`;
+      const isPointsText = /^\+\d+\s+points$/i.test(ft.text);
+      ctx.font = isPointsText
+        ? `bold ${ft.size}px "Times New Roman", Times, serif`
+        : `bold ${ft.size}px "Segoe UI", Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       // Shadow
@@ -500,6 +503,7 @@
       if (comboTimer <= 0) {
         comboCount = 0;
         comboTimer = 0;
+        comboDisplay = { count: 0, life: 0, scale: 0, t: 0 };
       }
     }
     if (comboDisplay.life > 0) {
@@ -535,6 +539,91 @@
     ctx.restore();
   }
 
+  function drawDebugEval() {
+    if (!FINETUNE.debugShowEngineEval) return;
+    const evalValue = typeof Game.lastTurnEngineEval === 'number' ? Game.lastTurnEngineEval : 0;
+    const sign = evalValue > 0 ? '+' : '';
+    const text = `Eval: ${sign}${evalValue.toFixed(2)}`;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = 'rgba(0,0,0,0.68)';
+    ctx.fillRect(8, 8, 132, 28);
+    ctx.font = 'bold 16px "Times New Roman", Times, serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(text, 14, 22);
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lifetime stats (persisted across sessions)
+  // ---------------------------------------------------------------------------
+  const STATS_KEY = 'chessArena_lifetimeStats';
+  let lifetimeStats = { totalKills: 0, maxScore: 0, totalPoints: 0, gamesPlayed: 0 };
+  try {
+    const _raw = localStorage.getItem(STATS_KEY);
+    if (_raw) lifetimeStats = Object.assign(lifetimeStats, JSON.parse(_raw));
+  } catch (e) {}
+
+  function saveLifetimeStats() {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(lifetimeStats)); } catch (e) {}
+  }
+
+  function openStatsPanel() {
+    document.getElementById('statGames').textContent = lifetimeStats.gamesPlayed.toLocaleString();
+    document.getElementById('statKills').textContent = lifetimeStats.totalKills.toLocaleString();
+    document.getElementById('statMax').textContent   = Math.floor(lifetimeStats.maxScore).toLocaleString();
+    document.getElementById('statTotal').textContent = Math.floor(lifetimeStats.totalPoints).toLocaleString();
+    document.getElementById('statsPanel').classList.remove('hidden');
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI settings persistence (dark mode, volume, clock, piece colour)
+  // ---------------------------------------------------------------------------
+  const UI_SETTINGS_KEY = 'chessArena_uiSettings';
+
+  function saveUISettings() {
+    try {
+      localStorage.setItem(UI_SETTINGS_KEY, JSON.stringify({
+        volume       : soundVolume,
+        darkMode     : document.body.classList.contains('dark'),
+        showClock,
+        playerPieceRow,
+      }));
+    } catch (e) {}
+  }
+
+  function loadUISettings() {
+    try {
+      const raw = localStorage.getItem(UI_SETTINGS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.volume != null) {
+        soundVolume = s.volume;
+        document.getElementById('volumeSlider').value = s.volume;
+      }
+      if (s.darkMode) {
+        document.body.classList.add('dark');
+        document.documentElement.classList.add('dark');
+        document.getElementById('darkModeCheck').checked = true;
+      }
+      if (s.showClock) {
+        showClock = true;
+        document.getElementById('showClockCheck').checked = true;
+        const clockBlock = document.getElementById('clock-block');
+        clockEl.textContent = formatClock(clockSeconds);
+        if (clockBlock) clockBlock.classList.remove('hidden');
+      }
+      if (s.playerPieceRow != null) {
+        playerPieceRow = s.playerPieceRow;
+        document.querySelectorAll('.swatch').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.row, 10) === playerPieceRow);
+        });
+      }
+    } catch (e) {}
+  }
+
   // ===========================================================================
   // Register Game callbacks
   // ===========================================================================
@@ -542,8 +631,15 @@
     onStateChange : () => { /* redrawn every frame */ },
 
     onGameOver: (score, hs) => {
+      // Accumulate lifetime stats
+      lifetimeStats.gamesPlayed++;
+      lifetimeStats.totalKills  += Game.killCount;
+      lifetimeStats.totalPoints += score;
+      if (score > lifetimeStats.maxScore) lifetimeStats.maxScore = score;
+      saveLifetimeStats();
+
       document.getElementById('goScore').textContent     = `Score: ${Math.floor(score)}`;
-      document.getElementById('goHighScore').textContent = `High Score: ${Math.floor(hs)}`;
+      document.getElementById('goHighScore').textContent = `Best: ${Math.floor(hs)}`;
       document.getElementById('gameOverPanel').classList.remove('hidden');
     },
 
@@ -561,10 +657,13 @@
       });
       // Shockwave
       spawnShockwave(cx, cy, 40 + info.value * 6, info.isPlayerCapture ? '#FFD93D' : '#888');
-      // Floating score text
+      // Floating score text — merge in any pending time-bonus so only one label appears
       if (info.isPlayerCapture) {
-        const pts = Math.floor(info.value * 10);
-        spawnFloatingText(cx, cy - 10, `+${pts}`, '#111111', 16 + Math.min(info.value * 2, 10));
+        const pts = Math.floor(info.value * 10) + pendingMoveBonus;
+        pendingMoveBonus = 0;
+        if (pts > 9) {
+          spawnFloatingText(cx, cy - 10, `+${pts} points`, '#111111', 16 + Math.min(info.value * 2, 10));
+        }
       }
       // Combo
       if (info.isPlayerCapture) {
@@ -597,7 +696,7 @@
       moveStartTime = performance.now();
     },
 
-    onScoreChange: (score, hs, moves) => {
+    onScoreChange: (score, hs, moves, kills) => {
       // If game reset, snap score to 0 immediately instead of counting down
       if (score === 0) {
         displayScore = 0;
@@ -611,29 +710,25 @@
         scoreEl.classList.add('score-pop');
       }
       // High score and moves update immediately
-      highEl.textContent = Math.floor(hs).toLocaleString();
+      if (hs > lifetimeStats.maxScore) lifetimeStats.maxScore = hs;
+      highEl.textContent = Math.floor(lifetimeStats.maxScore).toLocaleString();
       if (moveEl) moveEl.textContent = `Moves: ${moves}`;
     },
   });
 
   // Move-start time: reset each time it becomes the player's turn (via onTurnStart callback)
-  let moveStartTime = performance.now();
+  let moveStartTime    = performance.now();
+  let pendingMoveBonus = 0; // absorbed into capture text if a capture happens same move
 
   // ---------------------------------------------------------------------------
   // Load save or fresh start
   // ---------------------------------------------------------------------------
-  const loaded = Game.load();
-  if (!loaded) {
-    Game.initBoard();
-    resetClock();
-  } else {
-    displayScore = Game.score;
-    targetScore  = Game.score;
-    scoreEl.textContent = Math.floor(Game.score).toLocaleString();
-    highEl.textContent  = Math.floor(Game.highScore).toLocaleString();
-    if (moveEl) moveEl.textContent  = `Moves: ${Game.moveNum}`;
-    resetClock();
-  }
+  // Always start a fresh board on page load so spawn count and state are
+  // always clean (matching Restart behaviour). Game.load() is called first
+  // solely to restore the persisted high score before initBoard() runs.
+  Game.load();
+  Game.initBoard();
+  resetClock();
 
   // ---------------------------------------------------------------------------
   // Easing
@@ -812,6 +907,9 @@
     // Combo display
     drawCombo();
 
+    // Debug eval HUD
+    drawDebugEval();
+
     ctx.restore(); // end shake transform
 
     requestAnimationFrame(render);
@@ -913,6 +1011,7 @@
     if (elapsedSec >= FINETUNE.comboTimeoutSec) {
       comboCount = 0;
       comboTimer = 0;
+      comboDisplay = { count: 0, life: 0, scale: 0, t: 0 };
     }
 
     // Detect en passant
@@ -926,12 +1025,20 @@
       return; // wait for menu selection
     }
 
-    // Apply bonus and show floating text
+    // Apply time bonus; defer floating text so it can merge with capture text.
     Game.addBonusScore(timeBonus);
     const [bonusX, bonusY] = boardToCanvas(toCol, toRow);
-    spawnFloatingText(bonusX, bonusY - SQUARE * 0.6, `+${timeBonus}`, '#111111', 13);
+    pendingMoveBonus = timeBonus;
 
     Game.onPieceMoved(startX, startY, toCol, toRow, isEP);
+    // If a capture fired, onCapture already consumed pendingMoveBonus.
+    // If no capture, show the time-bonus text here.
+    if (pendingMoveBonus > 0) {
+      if (pendingMoveBonus > 9) {
+        spawnFloatingText(bonusX, bonusY - SQUARE * 0.6, `+${pendingMoveBonus} points`, '#111111', 13);
+      }
+      pendingMoveBonus = 0;
+    }
     // Cancel slide animation — piece was already dragged visually to destination
     const movedPiece = Game.pieces.find(p => p.x === toCol && p.y === toRow);
     if (movedPiece) { movedPiece.animT = 1; movedPiece.animating = false; }
@@ -992,6 +1099,7 @@
   // Volume slider
   document.getElementById('volumeSlider').addEventListener('input', (e) => {
     soundVolume = parseFloat(e.target.value);
+    saveUISettings();
   });
 
   // Dark mode toggle
@@ -999,6 +1107,7 @@
     const on = e.target.checked;
     document.body.classList.toggle('dark', on);
     document.documentElement.classList.toggle('dark', on);
+    saveUISettings();
   });
 
   // Clock toggle in settings
@@ -1011,6 +1120,7 @@
     } else {
       if (clockBlock) clockBlock.classList.add('hidden');
     }
+    saveUISettings();
   });
 
   // Piece colour toggle (black or white appearance for player)
@@ -1019,7 +1129,23 @@
       document.querySelectorAll('.swatch').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       playerPieceRow = parseInt(btn.dataset.row, 10);
+      saveUISettings();
     });
+  });
+
+  // Restore saved UI settings
+  loadUISettings();
+
+  document.getElementById('statsBtn').addEventListener('click', () => {
+    document.getElementById('settingsPanel').classList.add('hidden');
+    openStatsPanel();
+  });
+  document.getElementById('closeStatsBtn').addEventListener('click', () => {
+    document.getElementById('statsPanel').classList.add('hidden');
+  });
+  document.getElementById('statsPanel').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget)
+      document.getElementById('statsPanel').classList.add('hidden');
   });
 
   document.getElementById('creditsBtn').addEventListener('click', () => {
