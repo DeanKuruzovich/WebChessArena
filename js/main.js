@@ -28,9 +28,10 @@
     });
   }
 
-  const boardImg   = await loadImage('Assets/Chess kit (Community).png');
-  const spriteImg   = await loadImage('Assets/Chess_Pieces_Sprite.svg');
-  const sparkleImg  = await loadImage('Assets/Sparkle.png');
+  const boardImg    = await loadImage('Assets/Chess kit (Community).png');
+  const spriteImg    = await loadImage('Assets/Chess_Pieces_Sprite.svg');
+  const sparkleImg   = await loadImage('Assets/star.svg');
+  const cloudoverImg = await loadImage('Assets/cloudover1.png');
 
   // Audio
   function loadAudio(src) {
@@ -789,14 +790,20 @@
       ctx.globalAlpha = p.alpha;
       drawPieceSprite(p.type, cx - sz / 2, cy - sz / 2, sz, sz);
 
+      // Cloud overlay on forming (fading-in) pieces
+      if (p.alpha < 1 && cloudoverImg) {
+        ctx.globalAlpha = 1 - p.alpha;
+        ctx.drawImage(cloudoverImg, cx - SQUARE / 2, cy - SQUARE / 2, SQUARE, SQUARE);
+      }
+
       // Sparkle indicator on convertable pieces — top-right corner badge
       if (p.convertable) {
-        const pulse = 0.7 + 0.3 * Math.sin(now / 280);
-        ctx.globalAlpha = p.alpha * pulse;
+        const pulse = 0.5 + 0.3 * Math.sin(now / 300);
+        ctx.globalAlpha =  pulse;
         if (sparkleImg) {
           // Place star at the top-right corner of the piece, slightly inset
           const spSz = sz * 0.72;
-          ctx.drawImage(sparkleImg, cx + sz * 0.2-45, cy - sz * 0.65+6, spSz*1.4, spSz*1.4);
+          ctx.drawImage(sparkleImg, cx + sz * 0.2-43, cy - sz * 0.65+8, spSz*1.4, spSz*1.4);
         } else {
           ctx.globalAlpha = 0.9;
           ctx.fillStyle = '#FFD700';

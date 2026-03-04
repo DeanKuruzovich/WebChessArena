@@ -114,4 +114,14 @@ const FINETUNE = {
   // ---------------------------------------------------------------------------
   debugShowEngineEval: 1,
 
+  // ---------------------------------------------------------------------------
+  // Debug mode:
+  //   true  -> on start/restart, always spawn 3 test pieces:
+  //              • a normal opponent piece  (fully solid, not convertable)
+  //              • a faded opponent piece   (still forming)
+  //              • a star opponent piece    (convertable)
+  //   false -> normal gameplay, no forced pieces
+  // ---------------------------------------------------------------------------
+  debugMode: true,
+
 };

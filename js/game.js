@@ -265,6 +265,21 @@ const Game = (() => {
       }
     }
 
+    // --- Debug mode: force one normal, one faded, one star piece ---
+    if (FINETUNE.debugMode) {
+      const debugType = weightedRandom(FINETUNE.oppPieceWeights);
+
+      // Normal piece (fully solid, not convertable)
+      const debugNormal = addPieceRandPos(debugType, 0);
+
+      // Faded / forming piece
+      const debugFading = addPieceRandPos(debugType, FINETUNE.formingMoves);
+
+      // Star / convertable piece (fully solid)
+      const debugStar = addPieceRandPos(debugType, 0);
+      if (debugStar) debugStar.convertable = true;
+    }
+
     if (cb.onStateChange) cb.onStateChange();
     if (cb.onScoreChange) cb.onScoreChange(score, highScore, moveNum, killCount);
     save();
