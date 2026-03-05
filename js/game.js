@@ -422,22 +422,6 @@ const Game = (() => {
       pendingPlayerPiece = null;
     }
 
-    // Game-over check (no black pieces or no legal moves)
-    // Pass an all-zeros awakeness map so that forming (developing) player pieces
-    // are treated as fully active for the purpose of this check. This prevents
-    // a false game-over when the only player pieces left are still developing —
-    // they WILL have moves once they finish forming, so keep playing.
-    const blackPieces = countPieces(false);
-    const allActiveMap = Array.from({length: 8}, () => new Array(8).fill(0));
-    const anyMoveIfFullyActive = getAllMovesPlayer(board, allActiveMap, true, enPassantTarget).length > 0;
-    if (blackPieces === 0 || !anyMoveIfFullyActive) {
-      isInGame = false;
-      canMovePieces = false;
-      save();
-      if (cb.onGameOver) cb.onGameOver(score, highScore);
-      return;
-    }
-
     const wp = countPieces(true);
     const bp = countPieces(false);
 
@@ -519,6 +503,23 @@ const Game = (() => {
           }
         }
       }
+    }
+
+    // Game-over check (no black pieces or no legal moves)
+    // Runs AFTER all spawning so a newly-placed blocking piece is included.
+    // Pass an all-zeros awakeness map so that forming (developing) player pieces
+    // are treated as fully active for the purpose of this check. This prevents
+    // a false game-over when the only player pieces left are still developing —
+    // they WILL have moves once they finish forming, so keep playing.
+    const blackPieces = countPieces(false);
+    const allActiveMap = Array.from({length: 8}, () => new Array(8).fill(0));
+    const anyMoveIfFullyActive = getAllMovesPlayer(board, allActiveMap, true, enPassantTarget).length > 0;
+    if (blackPieces === 0 || !anyMoveIfFullyActive) {
+      isInGame = false;
+      canMovePieces = false;
+      save();
+      if (cb.onGameOver) cb.onGameOver(score, highScore);
+      return;
     }
 
     canMovePieces = true;
