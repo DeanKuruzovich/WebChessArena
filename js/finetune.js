@@ -21,8 +21,9 @@ const FINETUNE = {
   // postMoveSpawn), so the player always sees the fully-solid piece at the start
   // of the turn when it first becomes active.
   // ---------------------------------------------------------------------------
-  formingMoves : 2,
-  formingAlpha : 0.40,
+  formingMoves      : 2,
+  formingAlpha      : 0.40,
+  formingFadeInSec  : 0.6,   // seconds the piece takes to fade from formingAlpha → 1.0 once active
 
   // ---------------------------------------------------------------------------
   // Eval-based equilibrium:
@@ -98,14 +99,14 @@ const FINETUNE = {
   // Combo: reset combo counter if player spends more than this many seconds
   // on a single move.
   // ---------------------------------------------------------------------------
-  comboTimeoutSec: 5,
+  comboTimeoutSec: 2.5,
 
   // ---------------------------------------------------------------------------
   // "Miracle" spawn: when the player has exactly ONE piece and it is not a Queen,
   // this is the probability that a convertable piece spawns on one of its
   // attack squares each turn.
   // ---------------------------------------------------------------------------
-  miracleProb: 1,
+  miracleProb: 0.25,
 
   // ---------------------------------------------------------------------------
   // Debug HUD toggle:
@@ -122,6 +123,6 @@ const FINETUNE = {
   //              • a star opponent piece    (convertable)
   //   false -> normal gameplay, no forced pieces
   // ---------------------------------------------------------------------------
-  debugMode: true,
+  debugMode: false,
 
 };
