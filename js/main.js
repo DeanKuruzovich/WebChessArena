@@ -791,8 +791,9 @@
       drawPieceSprite(p.type, cx - sz / 2, cy - sz / 2, sz, sz);
 
       // Cloud overlay on forming (fading-in) pieces
+      // Normalized so cloud is 100% opacity at formingAlpha and fades to 0 at full opacity
       if (p.alpha < 1 && cloudoverImg) {
-        ctx.globalAlpha = 1 - p.alpha;
+        ctx.globalAlpha = Math.min(1, (1 - p.alpha) / (1 - FINETUNE.formingAlpha));
         ctx.drawImage(cloudoverImg, cx - SQUARE / 2, cy - SQUARE / 2, SQUARE, SQUARE);
       }
 
