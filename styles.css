@@ -57,13 +57,13 @@ html, body {
   font-size: 0.85rem;
   font-weight: normal;
   letter-spacing: 0.06em;
-  color: #888;
+  color: #1a1a1a;
   font-family: 'Times New Roman', Times, serif;
   vertical-align: middle;
 }
 
 body.dark #rankTitle .rank-label {
-  color: #aaa;
+  color: #e8e8e8;
 }
 
 #rankTitle .rank-value {

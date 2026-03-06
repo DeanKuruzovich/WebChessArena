@@ -130,7 +130,7 @@ const FINETUNE = {
   // Set to 'CM', 'FM', 'IM', or 'GM' to force that rank in the title.
   // Set to '' to show no rank.
   // ---------------------------------------------------------------------------
-  debugRank: 'GM',
+  debugRank: 'CM',
 
   // ---------------------------------------------------------------------------
   // Debug board: when debugMode is true AND non-null, initBoard() loads this

@@ -648,6 +648,7 @@
         document.querySelectorAll('.swatch').forEach(b => {
           b.classList.toggle('active', parseInt(b.dataset.row, 10) === playerPieceRow);
         });
+        updateRulesEnemyColor();
       }
     } catch (e) {}
   }
@@ -1163,11 +1164,17 @@
   });
 
   // Piece colour toggle (black or white appearance for player)
+  function updateRulesEnemyColor() {
+    const enemyColor = playerPieceRow === 0 ? 'black' : 'white';
+    document.querySelectorAll('.rules-enemy-color').forEach(el => { el.textContent = enemyColor; });
+  }
+
   document.querySelectorAll('.swatch').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.swatch').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       playerPieceRow = parseInt(btn.dataset.row, 10);
+      updateRulesEnemyColor();
       saveUISettings();
     });
   });
