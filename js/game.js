@@ -123,10 +123,12 @@ const Game = (() => {
     const isBlkType = isBlack(type);
 
     if (isP) {
-      // Black promotes at y=0 (moves toward y=0), so don't spawn at 0 or 1.
-      // White promotes at y=7 (moves toward y=7), so don't spawn at 6 or 7.
-      const yMin = isBlkType ? 2 : 1;
-      const yMax = isBlkType ? 6 : 5;
+      // Black promotes at y=0 (moves toward y=0), so don't spawn at 0.
+      // White promotes at y=7 (moves toward y=7), so don't spawn within 2 moves of promo.
+      // Player (black) pawns: can spawn as close as y=1 (1 move from promotion).
+      // Opponent (white) pawns: must spawn at y<=4 (3+ moves from promotion at y=7).
+      const yMin = isBlkType ? 1 : 1;
+      const yMax = isBlkType ? 6 : 4;
       do {
         x = Math.floor(Math.random() * 8);
         y = yMin + Math.floor(Math.random() * (yMax - yMin + 1));
@@ -265,19 +267,31 @@ const Game = (() => {
       }
     }
 
-    // --- Debug mode: force one normal, one faded, one star piece ---
+    // --- Debug mode ---
     if (FINETUNE.debugMode) {
-      const debugType = weightedRandom(FINETUNE.oppPieceWeights);
-
-      // Normal piece (fully solid, not convertable)
-      const debugNormal = addPieceRandPos(debugType, 0);
-
-      // Faded / forming piece
-      const debugFading = addPieceRandPos(debugType, FINETUNE.formingMoves);
-
-      // Star / convertable piece (fully solid)
-      const debugStar = addPieceRandPos(debugType, 0);
-      if (debugStar) debugStar.convertable = true;
+      if (FINETUNE.debugBoard) {
+        // Load exact position from finetune.debugBoard / debugAwakenessMap
+        emptyBoard();
+        pieces = [];
+        for (let col = 0; col < 8; col++) {
+          for (let row = 0; row < 8; row++) {
+            const type = FINETUNE.debugBoard[col][row];
+            if (type && type !== '') {
+              const forming = FINETUNE.debugAwakenessMap
+                ? (FINETUNE.debugAwakenessMap[col][row] || 0)
+                : 0;
+              createPiece(col, row, type, forming);
+            }
+          }
+        }
+      } else {
+        // Fallback: force one normal, one faded, one star piece
+        const debugType = weightedRandom(FINETUNE.oppPieceWeights);
+        const debugNormal = addPieceRandPos(debugType, 0);
+        const debugFading = addPieceRandPos(debugType, FINETUNE.formingMoves);
+        const debugStar   = addPieceRandPos(debugType, 0);
+        if (debugStar) debugStar.convertable = true;
+      }
     }
 
     if (cb.onStateChange) cb.onStateChange();
@@ -507,14 +521,12 @@ const Game = (() => {
 
     // Game-over check (no black pieces or no legal moves)
     // Runs AFTER all spawning so a newly-placed blocking piece is included.
-    // Pass an all-zeros awakeness map so that forming (developing) player pieces
-    // are treated as fully active for the purpose of this check. This prevents
-    // a false game-over when the only player pieces left are still developing —
-    // they WILL have moves once they finish forming, so keep playing.
+    // Use the real awakeness map so forming (undeveloped) pieces are correctly
+    // treated as unable to move — if the player has no moves right now, game over.
     const blackPieces = countPieces(false);
-    const allActiveMap = Array.from({length: 8}, () => new Array(8).fill(0));
-    const anyMoveIfFullyActive = getAllMovesPlayer(board, allActiveMap, true, enPassantTarget).length > 0;
-    if (blackPieces === 0 || !anyMoveIfFullyActive) {
+    const realAwakenessMap = makeAwakenessMap();
+    const anyMoveNow = getAllMovesPlayer(board, realAwakenessMap, true, enPassantTarget).length > 0;
+    if (blackPieces === 0 || !anyMoveNow) {
       isInGame = false;
       canMovePieces = false;
       save();

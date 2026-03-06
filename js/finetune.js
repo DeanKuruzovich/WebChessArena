@@ -113,7 +113,7 @@ const FINETUNE = {
   //   1 / true  -> show engine eval in corner
   //   0 / false -> hide debug eval
   // ---------------------------------------------------------------------------
-  debugShowEngineEval: 1,
+  debugShowEngineEval: 0,
 
   // ---------------------------------------------------------------------------
   // Debug mode:
@@ -124,5 +124,50 @@ const FINETUNE = {
   //   false -> normal gameplay, no forced pieces
   // ---------------------------------------------------------------------------
   debugMode: false,
+
+  // ---------------------------------------------------------------------------
+  // Debug rank override (only applied when debugMode is true).
+  // Set to 'CM', 'FM', 'IM', or 'GM' to force that rank in the title.
+  // Set to '' to show no rank.
+  // ---------------------------------------------------------------------------
+  debugRank: 'GM',
+
+  // ---------------------------------------------------------------------------
+  // Debug board: when debugMode is true AND non-null, initBoard() loads this
+  // exact position instead of generating a random one.
+  // Format: board[col][row], col 0-7 left->right, row 0-7 top->bottom.
+  // Uppercase = black (player), lowercase = white (AI), '' = empty.
+  // Set to null to use normal random board generation.
+  // ---------------------------------------------------------------------------
+  debugBoard: null,
+  //  debugBoard: [
+  //   ['q', '', '', '', '', '', '', ''],   // col 0
+  //   ['', '', '', '', '', '', '', ''],   // col 1
+  //   ['', '', '', 'Q', '', '', '', ''],  // col 2 - player Queen at (2,3)
+  //   ['', '', '', '', '', '', '', ''],   // col 3
+  //   ['', '', '', '', '', '', '', ''],  // col 4 - AI queen at (4,4)
+  //   ['', '', '', '', '', '', '', ''],   // col 5
+  //   ['', '', '', '', '', '', '', ''],   // col 6
+  //   ['', '', '', '', '', '', '', ''],   // col 7
+  // ],
+
+  // ---------------------------------------------------------------------------
+  // Debug awakeness map: paired with debugBoard.
+  // Format: map[col][row] = movesUntilFormed (0 = active, >0 = forming).
+  // Only used when debugMode is true and debugBoard is non-null.
+  // Set to null to treat all pieces as fully active.
+  // ---------------------------------------------------------------------------
+  debugAwakenessMap: null,
+  
+  // debugAwakenessMap: [
+  //   [2,0,0,0,0,0,0,0],
+  //   [0,0,0,0,0,0,0,0],
+  //   [0,0,0,0,0,0,0,0],
+  //   [0,0,2,0,0,0,0,0],
+  //   [0,0,0,0,0,0,0,0], 
+  //   [0,0,0,0,0,0,0,0],
+  //   [0,0,0,0,0,0,0,0],
+  //   [0,0,0,0,0,0,0,0],
+  // ],
 
 };

@@ -47,6 +47,52 @@ html, body {
   letter-spacing: 0.03em;
 }
 
+#rankTitle {
+  vertical-align: middle;
+  margin-left: 18px;
+  white-space: nowrap;
+}
+
+#rankTitle .rank-label {
+  font-size: 0.85rem;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  color: #888;
+  font-family: 'Times New Roman', Times, serif;
+  vertical-align: middle;
+}
+
+body.dark #rankTitle .rank-label {
+  color: #aaa;
+}
+
+#rankTitle .rank-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  font-family: 'Times New Roman', Times, serif;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
+.rank-cm { color: #cd7f32; }
+.rank-fm { color: #aaaaaa; }
+.rank-im { color: #ffd700; }
+
+.rank-gm {
+  background: linear-gradient(90deg, #ff4444, #ff9900, #ffff00, #33ee33, #3399ff, #cc44ff, #ff4444);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: rainbowShift 2s linear infinite;
+}
+
+@keyframes rainbowShift {
+  from { background-position: 0% center; }
+  to   { background-position: 200% center; }
+}
+
 #top-buttons {
   display: flex;
   gap: 10px;
@@ -72,6 +118,7 @@ html, body {
   justify-content: space-evenly;
   align-items: flex-start;
   padding: 4px 0 8px;
+  position: relative;
 }
 
 .score-block {
@@ -378,3 +425,77 @@ body.dark .hud-btn:hover {
   word-break: break-all;
 }
 .credits-link:hover { opacity: 0.7; }
+
+/* ── Stats panel rows ───────────────────────────────────────── */
+.stats-content {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid #333;
+  gap: 24px;
+}
+
+.stats-row:last-child {
+  border-bottom: none;
+}
+
+.stats-label {
+  font-size: 0.95rem;
+  color: #aaaaaa;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.stats-value {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: right;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+
+
+/* ── Rank in stats panel ───────────────────────────────────── */
+#statRankBlock {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#statRankLabel {
+  font-size: 3rem;
+  font-weight: bold;
+  font-family: 'Times New Roman', Times, serif;
+  line-height: 1;
+  min-height: 3rem;
+}
+
+.stats-rank-title {
+  font-size: 0.82rem;
+  letter-spacing: 0.18em;
+  color: #aaaaaa;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.stats-rank-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: #888888;
+  line-height: 1.5;
+}
+
+.stats-rank-desc strong {
+  font-weight: bold;
+}

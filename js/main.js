@@ -249,14 +249,10 @@
       ctx.globalAlpha = Math.min(1, ft.life * 2);
       const isPointsText = /^\+\d+\s+points$/i.test(ft.text);
       ctx.font = isPointsText
-        ? `bold ${ft.size}px "Times New Roman", Times, serif`
+        ? `${ft.size}px "Times New Roman", Times, serif`
         : `bold ${ft.size}px "Segoe UI", Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText(ft.text, ft.x + 1.5, ft.y + 1.5);
-      // Main text
       ctx.fillStyle = ft.color;
       ctx.fillText(ft.text, ft.x, ft.y);
       ctx.restore();
@@ -577,11 +573,36 @@
     try { localStorage.setItem(STATS_KEY, JSON.stringify(lifetimeStats)); } catch (e) {}
   }
 
+  function getPlayerRank() {
+    if (FINETUNE.debugMode && typeof FINETUNE.debugRank === 'string') return FINETUNE.debugRank;
+    const pts  = lifetimeStats.totalPoints;
+    const best = lifetimeStats.maxScore;
+    if (pts >= 100000 || best >= 10000) return 'GM';
+    if (pts >= 50000  || best >= 3000)  return 'IM';
+    if (pts >= 25000  || best >= 1000)  return 'FM';
+    if (pts >= 10000  || best >= 500)   return 'CM';
+    return '';
+  }
+
+  function updateRankBadge() {
+    const el   = document.getElementById('rankTitle');
+    const rank = getPlayerRank();
+    if (!el) return;
+    if (!rank) { el.innerHTML = ''; return; }
+    const cls = 'rank-' + rank.toLowerCase();
+    el.innerHTML = `<span class="rank-label">Rank:</span><span class="rank-value ${cls}">${rank}</span>`;
+  }
+  updateRankBadge();
+
   function openStatsPanel() {
-    document.getElementById('statGames').textContent = lifetimeStats.gamesPlayed.toLocaleString();
-    document.getElementById('statKills').textContent = lifetimeStats.totalKills.toLocaleString();
-    document.getElementById('statMax').textContent   = Math.floor(lifetimeStats.maxScore).toLocaleString();
-    document.getElementById('statTotal').textContent = Math.floor(lifetimeStats.totalPoints).toLocaleString();
+    document.getElementById('statGames').textContent     = lifetimeStats.gamesPlayed.toLocaleString();
+    document.getElementById('statKills').textContent     = lifetimeStats.totalKills.toLocaleString();
+    document.getElementById('statMax').textContent       = Math.floor(lifetimeStats.maxScore).toLocaleString();
+    document.getElementById('statTotal').textContent     = Math.floor(lifetimeStats.totalPoints).toLocaleString();
+    const rankEl  = document.getElementById('statRankLabel');
+    const curRank  = getPlayerRank();
+    rankEl.className = curRank ? 'rank-' + curRank.toLowerCase() : '';
+    rankEl.textContent = curRank;
     document.getElementById('statsPanel').classList.remove('hidden');
   }
 
@@ -644,6 +665,7 @@
       lifetimeStats.totalPoints += score;
       if (score > lifetimeStats.maxScore) lifetimeStats.maxScore = score;
       saveLifetimeStats();
+      updateRankBadge();
 
       document.getElementById('goScore').textContent     = `Score: ${Math.floor(score)}`;
       document.getElementById('goHighScore').textContent = `Best: ${Math.floor(hs)}`;
