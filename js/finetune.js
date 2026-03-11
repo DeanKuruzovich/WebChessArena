@@ -37,9 +37,10 @@ const FINETUNE = {
   //   eval=+8 → factor 0.0  → clamped to min (player losing → give breathing room)
   // ---------------------------------------------------------------------------
   evalSpawnDivisor     : 6,
-  minSpawnFactor       : 0.05,
-  maxSpawnFactor       : 2,
-  spawnFactorBiasPerTurn: 0.96,  // multiplied into the raw spawn factor each turn (before clamping)
+  minSpawnFactor       : 0.1,
+  maxSpawnFactor       : 3,
+  spawnFactorScaler      : 1.5,   // base multiplier on the final clamped spawn factor
+  spawnFactorScalerScaler: 1.04,  // multiplies spawnFactorScaler every turn (compounds over time)
   
 
   // ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ const FINETUNE = {
   starBaseProb   : 0.28,
   evalStarDivisor: 8,
   starPieceScale : 0.1,   // subtract this per extra black piece (1 piece = base, 5 = base-4*scale)
-  starMinProb    : 0.3,
+  starMinProb    : 0.15,
   starMaxProb    : 0.90,
 
   // Soft max player pieces: no new star pieces spawn while the player has this many or more pieces.
@@ -65,7 +66,7 @@ const FINETUNE = {
   // Queens are kept very rare.
   // ---------------------------------------------------------------------------
   oppPieceWeights: {
-    p: 12.0,   // pawns  — most common
+    p: 16.0,   // pawns  — most common
     n: 2.5,   // knights
     b: 2.5,   // bishops
     r: 2.0,   // rooks

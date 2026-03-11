@@ -448,21 +448,26 @@ const Game = (() => {
     //   Player winning (eval < 0)  →  evalFactor > 1  →  more enemies, fewer stars
     //   Player losing  (eval > 0)  →  evalFactor < 1  →  fewer enemies, more stars
     // ---------------------------------------------------------------------------
-    const rawFactor = (1.0 - lastTurnEngineEval / FINETUNE.evalSpawnDivisor)
-      * Math.pow(FINETUNE.spawnFactorBiasPerTurn, moveNum);
+    const rawFactor = 1.0 - lastTurnEngineEval / FINETUNE.evalSpawnDivisor;
     const evalFactor = Math.max(
       FINETUNE.minSpawnFactor,
       Math.min(FINETUNE.maxSpawnFactor, rawFactor)
-    );
+    ) * FINETUNE.spawnFactorScaler * Math.pow(FINETUNE.spawnFactorScalerScaler, moveNum);
 
     if (wp === 0) {
       // Board just emptied — re-populate quietly (no bonus, no VFX)
       addRandomOppPiece(bp);
       addRandomOppPiece(bp);
-      if (Math.random() < 0.55 * evalFactor) addRandomOppPiece(bp);
+      const extraProb = 0.55 * evalFactor;
+      const guaranteed = Math.floor(extraProb);
+      for (let i = 0; i < guaranteed; i++) addRandomOppPiece(bp);
+      if (Math.random() < extraProb - guaranteed) addRandomOppPiece(bp);
     } else {
       const idx = Math.min(wp, FINETUNE.oppSpawnProbs.length - 1);
-      if (Math.random() < FINETUNE.oppSpawnProbs[idx] * evalFactor) addRandomOppPiece(bp);
+      const spawnProb = FINETUNE.oppSpawnProbs[idx] * evalFactor;
+      const guaranteed = Math.floor(spawnProb);
+      for (let i = 0; i < guaranteed; i++) addRandomOppPiece(bp);
+      if (Math.random() < spawnProb - guaranteed) addRandomOppPiece(bp);
     }
 
     // -------------------------------------------------------------------------

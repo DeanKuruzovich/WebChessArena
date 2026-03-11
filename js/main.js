@@ -676,17 +676,15 @@
     onCapture: (info) => {
       playSound(sndCapture);
       const [cx, cy] = boardToCanvas(info.col, info.row);
-      // Particle burst
-      const colors = info.isPlayerCapture
-        ? CAPTURE_COLORS
-        : ['#888', '#aaa', '#666'];
-      spawnParticles(cx, cy, 18 + Math.floor(info.value * 3), colors, {
-        speed: 130 + info.value * 15,
-        sizeMin: 2, sizeMax: 6,
-        gravity: 90,
-      });
-      // Shockwave
-      spawnShockwave(cx, cy, 40 + info.value * 6, info.isPlayerCapture ? '#FFD93D' : '#888');
+      // Particle burst + shockwave only for player captures
+      if (info.isPlayerCapture) {
+        spawnParticles(cx, cy, 18 + Math.floor(info.value * 3), CAPTURE_COLORS, {
+          speed: 130 + info.value * 15,
+          sizeMin: 2, sizeMax: 6,
+          gravity: 90,
+        });
+        spawnShockwave(cx, cy, 40 + info.value * 6, '#FFD93D');
+      }
       // Floating score text — merge in any pending time-bonus so only one label appears
       if (info.isPlayerCapture) {
         // Award the time bonus now that we know a capture happened.
