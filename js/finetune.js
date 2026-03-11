@@ -36,9 +36,11 @@ const FINETUNE = {
   //   eval=-8 → factor 2.0  (player winning  → flood with enemies)
   //   eval=+8 → factor 0.0  → clamped to min (player losing → give breathing room)
   // ---------------------------------------------------------------------------
-  evalSpawnDivisor: 8,
-  minSpawnFactor  : 0.10,
-  maxSpawnFactor  : 2,
+  evalSpawnDivisor     : 6,
+  minSpawnFactor       : 0.05,
+  maxSpawnFactor       : 2,
+  spawnFactorBiasPerTurn: 0.96,  // multiplied into the raw spawn factor each turn (before clamping)
+  
 
   // ---------------------------------------------------------------------------
   // Star (convertable piece) probability:
@@ -53,13 +55,17 @@ const FINETUNE = {
   starMinProb    : 0.3,
   starMaxProb    : 0.90,
 
+  // Soft max player pieces: no new star pieces spawn while the player has this many or more pieces.
+  // Player can still exceed this by capturing stars that were already on the board at 4 pieces.
+  playerPieceSoftMax: 5,
+
   // ---------------------------------------------------------------------------
   // Opponent piece type weights.
   // A random piece type is sampled proportional to these weights.
   // Queens are kept very rare.
   // ---------------------------------------------------------------------------
   oppPieceWeights: {
-    p: 6.0,   // pawns  — most common
+    p: 12.0,   // pawns  — most common
     n: 2.5,   // knights
     b: 2.5,   // bishops
     r: 2.0,   // rooks
@@ -81,7 +87,14 @@ const FINETUNE = {
   },
 
   // ---------------------------------------------------------------------------
+  // Global score scale factor — multiplies every point award (captures,
+  // time bonus, promotion).  Result is always Math.round'd to keep integer scores.
+  // ---------------------------------------------------------------------------
+  scoreScaleFactor: 1,
+
+  // ---------------------------------------------------------------------------
   // Move-time score bonus (piecewise-linear between anchors).
+  //   Only awarded when the move captures a piece.
   //   < fastSec  →  fastBonus  (+10 for under 1 sec)
   //   = midSec   →  midBonus   (+5  for 5 sec)
   //   > slowSec  →  slowBonus  (+1  for 30+ sec)
@@ -139,17 +152,17 @@ const FINETUNE = {
   // Uppercase = black (player), lowercase = white (AI), '' = empty.
   // Set to null to use normal random board generation.
   // ---------------------------------------------------------------------------
-  debugBoard: null,
-  //  debugBoard: [
-  //   ['q', '', '', '', '', '', '', ''],   // col 0
-  //   ['', '', '', '', '', '', '', ''],   // col 1
-  //   ['', '', '', 'Q', '', '', '', ''],  // col 2 - player Queen at (2,3)
-  //   ['', '', '', '', '', '', '', ''],   // col 3
-  //   ['', '', '', '', '', '', '', ''],  // col 4 - AI queen at (4,4)
-  //   ['', '', '', '', '', '', '', ''],   // col 5
-  //   ['', '', '', '', '', '', '', ''],   // col 6
-  //   ['', '', '', '', '', '', '', ''],   // col 7
-  // ],
+  
+   debugBoard: [
+    ['', '', '', '', '', '', '', ''],  
+    ['', '', '', '', '', '', '', ''],
+    ['', '', 'R', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['n', '', '', '', 'q', '', '', ''],
+    ['', 'p', 'k', '', '', '', '', ''],
+    ['', '', '', 'P', '', '', '', ''],
+    ['', '', '', '', '', '', '', '']
+  ],
 
   // ---------------------------------------------------------------------------
   // Debug awakeness map: paired with debugBoard.
@@ -159,15 +172,15 @@ const FINETUNE = {
   // ---------------------------------------------------------------------------
   debugAwakenessMap: null,
   
-  // debugAwakenessMap: [
-  //   [2,0,0,0,0,0,0,0],
-  //   [0,0,0,0,0,0,0,0],
-  //   [0,0,0,0,0,0,0,0],
-  //   [0,0,2,0,0,0,0,0],
-  //   [0,0,0,0,0,0,0,0], 
-  //   [0,0,0,0,0,0,0,0],
-  //   [0,0,0,0,0,0,0,0],
-  //   [0,0,0,0,0,0,0,0],
-  // ],
+  debugAwakenessMap: [
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,2,0,0,0], 
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,2,0,0,0,0],
+    [0,0,0,0,0,0,0,0]
+  ]
 
 };

@@ -123,11 +123,10 @@ const Game = (() => {
     const isBlkType = isBlack(type);
 
     if (isP) {
-      // Black promotes at y=0 (moves toward y=0), so don't spawn at 0.
-      // White promotes at y=7 (moves toward y=7), so don't spawn within 2 moves of promo.
-      // Player (black) pawns: can spawn as close as y=1 (1 move from promotion).
-      // Opponent (white) pawns: must spawn at y<=4 (3+ moves from promotion at y=7).
-      const yMin = isBlkType ? 1 : 1;
+      // Black promotes at y=0 (moves toward y=0), so must spawn at y>=3 (3+ moves away).
+      // White promotes at y=7 (moves toward y=7), so must spawn at y<=4 (3+ moves away).
+      // Both player and opponent pawns spawn at least 3 moves from their promotion rank.
+      const yMin = isBlkType ? 3 : 1;
       const yMax = isBlkType ? 6 : 4;
       do {
         x = Math.floor(Math.random() * 8);
@@ -150,6 +149,9 @@ const Game = (() => {
     const type  = weightedRandom(FINETUNE.oppPieceWeights);
     const piece = addPieceRandPos(type, FINETUNE.formingMoves);
     if (!piece) return null;
+    // No stars spawn while player is at or above the soft piece cap.
+    // Player can still exceed the cap by capturing stars already on the board.
+    if (blackPieceCount >= FINETUNE.playerPieceSoftMax) return piece;
     // Star (convertable) probability:
     //   base + eval/divisor (player losing → eval>0 → more stars to help recovery)
     //         - piece-count penalty (more black pieces = fewer stars needed)
@@ -310,11 +312,13 @@ const Game = (() => {
     // Track whether any capture happens this move
     let wasCapture = false;
 
-    // --- Score & capture callback: black capturing white ---
-    if (board[toX][toY] !== '' && isBlack(pieceType)) {
+    // --- Score & capture callback ---
+    if (board[toX][toY] !== '') {
       wasCapture = true;
-      killCount++;
-      addScore(getPieceValue(board[toX][toY]) * 10);
+      if (isBlack(pieceType)) {
+        killCount++;
+        addScore(Math.round(getPieceValue(board[toX][toY]) * 10 * FINETUNE.scoreScaleFactor));
+      }
       fireCapture(toX, toY, board[toX][toY], pieceType);
     }
 
@@ -322,12 +326,12 @@ const Game = (() => {
     if (isEnPassant && pieceType.toLowerCase() === 'p') {
       const epCapX = toX, epCapY = fromY;
       if (board[epCapX][epCapY] !== '') {
+        wasCapture = true;
         if (isBlack(pieceType)) {
           killCount++;
-          addScore(getPieceValue(board[epCapX][epCapY]) * 10);
-          fireCapture(epCapX, epCapY, board[epCapX][epCapY], pieceType);
-          wasCapture = true;
+          addScore(Math.round(getPieceValue(board[epCapX][epCapY]) * 10 * FINETUNE.scoreScaleFactor));
         }
+        fireCapture(epCapX, epCapY, board[epCapX][epCapY], pieceType);
         const capturedEP = findPiece(epCapX, epCapY);
         if (capturedEP && capturedEP.convertable) {
           pendingPlayerPiece = capturedEP.type.toUpperCase();
@@ -374,7 +378,7 @@ const Game = (() => {
         const newType = isBlack(pieceType) ? chosenType : 'q';
         promPiece.type  = newType;
         board[toX][toY] = newType;
-        if (toY === 0) addScore(15);
+        if (toY === 0) addScore(Math.round(15 * FINETUNE.scoreScaleFactor));
         if (cb.onPromotion) cb.onPromotion({ col: toX, row: toY, type: newType });
       }
     }
@@ -444,11 +448,11 @@ const Game = (() => {
     //   Player winning (eval < 0)  →  evalFactor > 1  →  more enemies, fewer stars
     //   Player losing  (eval > 0)  →  evalFactor < 1  →  fewer enemies, more stars
     // ---------------------------------------------------------------------------
+    const rawFactor = (1.0 - lastTurnEngineEval / FINETUNE.evalSpawnDivisor)
+      * Math.pow(FINETUNE.spawnFactorBiasPerTurn, moveNum);
     const evalFactor = Math.max(
       FINETUNE.minSpawnFactor,
-      Math.min(FINETUNE.maxSpawnFactor,
-        1.0 - lastTurnEngineEval / FINETUNE.evalSpawnDivisor
-      )
+      Math.min(FINETUNE.maxSpawnFactor, rawFactor)
     );
 
     if (wp === 0) {

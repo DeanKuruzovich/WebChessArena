@@ -689,7 +689,9 @@
       spawnShockwave(cx, cy, 40 + info.value * 6, info.isPlayerCapture ? '#FFD93D' : '#888');
       // Floating score text — merge in any pending time-bonus so only one label appears
       if (info.isPlayerCapture) {
-        const pts = Math.floor(info.value * 10) + pendingMoveBonus;
+        // Award the time bonus now that we know a capture happened.
+        if (pendingMoveBonus > 0) Game.addBonusScore(pendingMoveBonus);
+        const pts = Math.round(info.value * 10 * FINETUNE.scoreScaleFactor) + pendingMoveBonus;
         pendingMoveBonus = 0;
         if (pts > 9) {
           spawnFloatingText(cx, cy - 10, `+${pts} points`, '#111111', 16 + Math.min(info.value * 2, 10));
@@ -743,7 +745,10 @@
         scoreEl.classList.add('score-pop');
       }
       // High score and moves update immediately
-      if (hs > lifetimeStats.maxScore) lifetimeStats.maxScore = hs;
+      if (hs > lifetimeStats.maxScore) {
+        lifetimeStats.maxScore = hs;
+        updateRankBadge();  // unlock rank as soon as threshold is crossed mid-game
+      }
       highEl.textContent = Math.floor(lifetimeStats.maxScore).toLocaleString();
       if (moveEl) moveEl.textContent = `Moves: ${moves}`;
     },
@@ -1065,20 +1070,16 @@
       return; // wait for menu selection
     }
 
-    // Apply time bonus; defer floating text so it can merge with capture text.
-    Game.addBonusScore(timeBonus);
+    // Time bonus is only awarded when the move captures a piece.
+    // Store it so onCapture can consume it; discard silently if no capture occurs.
+    const scaledTimeBonus = Math.round(timeBonus * FINETUNE.scoreScaleFactor);
     const [bonusX, bonusY] = boardToCanvas(toCol, toRow);
-    pendingMoveBonus = timeBonus;
+    pendingMoveBonus = scaledTimeBonus;
 
     Game.onPieceMoved(startX, startY, toCol, toRow, isEP);
-    // If a capture fired, onCapture already consumed pendingMoveBonus.
-    // If no capture, show the time-bonus text here.
-    if (pendingMoveBonus > 0) {
-      if (pendingMoveBonus > 9) {
-        spawnFloatingText(bonusX, bonusY - SQUARE * 0.6, `+${pendingMoveBonus} points`, '#111111', 13);
-      }
-      pendingMoveBonus = 0;
-    }
+    // If a capture fired, onCapture already consumed and awarded pendingMoveBonus.
+    // If no capture, discard silently — no points for just moving.
+    pendingMoveBonus = 0;
     // Cancel slide animation — piece was already dragged visually to destination
     const movedPiece = Game.pieces.find(p => p.x === toCol && p.y === toRow);
     if (movedPiece) { movedPiece.animT = 1; movedPiece.animating = false; }
