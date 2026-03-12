@@ -95,6 +95,12 @@ const Game = (() => {
     return map;
   }
 
+  function makeConvertableMap() {
+    const map = Array.from({length: 8}, () => new Array(8).fill(false));
+    for (const p of pieces) if (p.convertable) map[p.x][p.y] = true;
+    return map;
+  }
+
 
 
   // ---------------------------------------------------------------------------
@@ -128,11 +134,34 @@ const Game = (() => {
       // Both player and opponent pawns spawn at least 3 moves from their promotion rank.
       const yMin = isBlkType ? 3 : 1;
       const yMax = isBlkType ? 6 : 4;
-      do {
-        x = Math.floor(Math.random() * 8);
-        y = yMin + Math.floor(Math.random() * (yMax - yMin + 1));
-        attempts++;
-      } while (board[x][y] !== '' && attempts < 64);
+
+      // Pawns may only share a file with another pawn of the same color if they are
+      // 4+ rows apart. Build the set of files that are already "blocked" by a nearby pawn.
+      const blockedFiles = new Set();
+      for (const p of pieces) {
+        if (p.type.toLowerCase() === 'p' && isBlack(p.type) === isBlkType) {
+          // Find candidate rows in this file and check if any would be < 4 away
+          for (let cy = yMin; cy <= yMax; cy++) {
+            if (Math.abs(cy - p.y) < 4) {
+              blockedFiles.add(p.x);
+              break;
+            }
+          }
+        }
+      }
+
+      // Collect all valid squares
+      const candidates = [];
+      for (let cx = 0; cx < 8; cx++) {
+        for (let cy = yMin; cy <= yMax; cy++) {
+          if (board[cx][cy] !== '') continue;
+          if (blockedFiles.has(cx)) continue;
+          candidates.push([cx, cy]);
+        }
+      }
+      if (candidates.length === 0) return null;
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      x = pick[0]; y = pick[1];
     } else {
       do {
         x = Math.floor(Math.random() * 8);
@@ -154,16 +183,17 @@ const Game = (() => {
     if (blackPieceCount >= FINETUNE.playerPieceSoftMax) return piece;
     // Star (convertable) probability:
     //   base + eval/divisor (player losing → eval>0 → more stars to help recovery)
-    //         - piece-count penalty (more black pieces = fewer stars needed)
+    //   scaled by starChanceScaler * starChanceScalerScaler^moveNum (compounds each turn)
     const bp   = Math.max(1, blackPieceCount);
-    const prob = Math.max(
+    const rawStarProb = Math.max(
       FINETUNE.starMinProb,
       Math.min(FINETUNE.starMaxProb,
         FINETUNE.starBaseProb
         + lastTurnEngineEval / FINETUNE.evalStarDivisor
-        - (bp - 1) * FINETUNE.starPieceScale
       )
     );
+    const prob = rawStarProb * FINETUNE.starChanceScaler
+      * Math.pow(FINETUNE.starChanceScalerScaler, moveNum);
     if (Math.random() < prob) piece.convertable = true;
     return piece;
   }
@@ -209,37 +239,27 @@ const Game = (() => {
     engine = new ChessEngine();
 
     // --- Player starting pieces ---
-    // Option A (50%): Pawn + Queen or Rook
-    // Option B (50%): 2 pieces from {Knight, Bishop, King} — no 2 Kings;
-    //                 if both Bishops, place them on opposite-colored squares
-    if (Math.random() < 0.5) {
-      // Option A
-      addPieceRandPos('P', 0);
-      addPieceRandPos(Math.random() < 0.5 ? 'Q' : 'R', 0);
-    } else {
-      // Option B
-      const pool = ['N', 'B', 'K'];
-      const p1 = pool[Math.floor(Math.random() * 3)];
-      let p2;
+    // Two pieces sampled from playerPieceWeights (0-weight types are excluded).
+    // No two Kings allowed. Two Bishops get placed on opposite-colored squares.
+    const p1 = weightedRandom(FINETUNE.playerPieceWeights);
+    let p2;
+    do { p2 = weightedRandom(FINETUNE.playerPieceWeights); }
+    while (p1 === 'K' && p2 === 'K');
+
+    const placed1 = addPieceRandPos(p1, 0);
+
+    if (p1 === 'B' && p2 === 'B' && placed1) {
+      // Force opposite-color square for the second bishop
+      const targetParity = 1 - ((placed1.x + placed1.y) % 2);
+      let ox, oy, att = 0;
       do {
-        p2 = pool[Math.floor(Math.random() * 3)];
-      } while (p1 === 'K' && p2 === 'K');  // no 2 Kings
-
-      const placed1 = addPieceRandPos(p1, 0);
-
-      if (p1 === 'B' && p2 === 'B' && placed1) {
-        // Force opposite-color square for the second bishop
-        const targetParity = 1 - ((placed1.x + placed1.y) % 2);
-        let ox, oy, att = 0;
-        do {
-          ox = Math.floor(Math.random() * 8);
-          oy = Math.floor(Math.random() * 8);
-          att++;
-        } while ((board[ox][oy] !== '' || (ox + oy) % 2 !== targetParity) && att < 64);
-        if (board[ox][oy] === '') createPiece(ox, oy, 'B', 0);
-      } else {
-        addPieceRandPos(p2, 0);
-      }
+        ox = Math.floor(Math.random() * 8);
+        oy = Math.floor(Math.random() * 8);
+        att++;
+      } while ((board[ox][oy] !== '' || (ox + oy) % 2 !== targetParity) && att < 64);
+      if (board[ox][oy] === '') createPiece(ox, oy, 'B', 0);
+    } else {
+      addPieceRandPos(p2, 0);
     }
 
     // --- Opponent starting pieces (mirrored player logic) ---
@@ -334,7 +354,7 @@ const Game = (() => {
         fireCapture(epCapX, epCapY, board[epCapX][epCapY], pieceType);
         const capturedEP = findPiece(epCapX, epCapY);
         if (capturedEP && capturedEP.convertable) {
-          pendingPlayerPiece = capturedEP.type.toUpperCase();
+          pendingPlayerPiece = weightedRandom(FINETUNE.playerPieceWeights);
         }
         removePieceAt(epCapX, epCapY);
       }
@@ -350,7 +370,7 @@ const Game = (() => {
       wasCapture = true;
       const capturedNormal = findPiece(toX, toY);
       if (capturedNormal && capturedNormal.convertable) {
-        pendingPlayerPiece = capturedNormal.type.toUpperCase();
+        pendingPlayerPiece = weightedRandom(FINETUNE.playerPieceWeights);
       }
       removePieceAt(toX, toY);
     }
@@ -398,11 +418,12 @@ const Game = (() => {
 
       const boardCopy  = board.map(col => [...col]);
       const awk        = makeAwakenessMap();
+      const convMap    = makeConvertableMap();
       const epCopy     = [...enPassantTarget];
 
       enPassantTarget = [-1, -1];
 
-      const bestMove = engine.getBestMove(boardCopy, awk, epCopy);
+      const bestMove = engine.getBestMove(boardCopy, awk, convMap, epCopy);
 
       if (bestMove) {
         setTimeout(() => doEngineMove(bestMove), 500);
@@ -452,9 +473,13 @@ const Game = (() => {
     const evalFactor = Math.max(
       FINETUNE.minSpawnFactor,
       Math.min(FINETUNE.maxSpawnFactor, rawFactor)
-    ) * FINETUNE.spawnFactorScaler * Math.pow(FINETUNE.spawnFactorScalerScaler, moveNum);
+    ) * FINETUNE.spawnFactorScaler * Math.pow(FINETUNE.spawnFactorScalerScaler, moveNum)
+      * Math.pow(FINETUNE.oppPieceNumberScaleDownFact, wp);
 
-    if (wp === 0) {
+    // Hard cap: no new spawns when already at or above maxOppPieces
+    if (wp >= FINETUNE.maxOppPieces) {
+      // skip spawning
+    } else if (wp === 0) {
       // Board just emptied — re-populate quietly (no bonus, no VFX)
       addRandomOppPiece(bp);
       addRandomOppPiece(bp);
@@ -463,8 +488,7 @@ const Game = (() => {
       for (let i = 0; i < guaranteed; i++) addRandomOppPiece(bp);
       if (Math.random() < extraProb - guaranteed) addRandomOppPiece(bp);
     } else {
-      const idx = Math.min(wp, FINETUNE.oppSpawnProbs.length - 1);
-      const spawnProb = FINETUNE.oppSpawnProbs[idx] * evalFactor;
+      const spawnProb = evalFactor;
       const guaranteed = Math.floor(spawnProb);
       for (let i = 0; i < guaranteed; i++) addRandomOppPiece(bp);
       if (Math.random() < spawnProb - guaranteed) addRandomOppPiece(bp);
@@ -473,12 +497,15 @@ const Game = (() => {
     // -------------------------------------------------------------------------
     // "Miracle" spawn: a lifeline for the player when all hope is lost.
     //
-    // Triggers when ALL of the following are true:
-    //   1. Player has exactly ONE active (non-forming) piece and it isn't a Queen
-    //   2. That piece cannot already capture any existing ★ (convertable) pieces
-    //   3. The opponent is a serious threat:
-    //        - more than 2 enemy pieces, OR
-    //        - 2+ enemy pieces including at least one queen or rook
+    // Triggers when EITHER of the following is true:
+    //   A. Player has exactly 1 active piece and it isn't a Queen, OR
+    //   B. Player has 3 or fewer active pieces AND is down 4+ material vs opponent
+    //
+    // Plus ALL of:
+    //   - That piece / the single hero cannot already capture any existing ★ pieces
+    //   - The opponent is a serious threat:
+    //       - more than 2 enemy pieces, OR
+    //       - 2+ enemy pieces including at least one queen or rook
     //
     // Effect (with probability FINETUNE.miracleProb):
     //   A new ★ opponent piece spawns on a square that:
@@ -487,10 +514,23 @@ const Game = (() => {
     //   Spawns with the normal forming delay so the player sees it coming.
     // -------------------------------------------------------------------------
     const activePieces = pieces.filter(p => isBlack(p.type) && p.movesUntilFormed === 0);
-    if (activePieces.length === 1 && activePieces[0].type !== 'Q') {
-      const hero = activePieces[0];
+    const enemyPieces  = pieces.filter(p => isWhite(p.type));
+    const playerMaterial = activePieces.reduce((s, p) => s + getPieceValue(p.type), 0);
+    const enemyMaterial  = enemyPieces.reduce((s, p) => s + getPieceValue(p.type), 0);
+    const materialDeficit = enemyMaterial - playerMaterial;
 
-      // Condition 2: can the hero already reach a ★ piece this turn?
+    const singleHero    = activePieces.length === 1 && activePieces[0].type !== 'Q';
+    const desperateMode = activePieces.length >= 1 && activePieces.length <= 3 && materialDeficit >= 3;
+    const miracleChance = moveNum <= 5 ? FINETUNE.miracleFirstFiveTurns : FINETUNE.miracleProb;
+
+    if (singleHero || desperateMode) {
+      // Pick a hero piece to base the miracle square on:
+      // single-hero: that piece; desperate: lowest-value active piece
+      const hero = singleHero
+        ? activePieces[0]
+        : activePieces.reduce((a, b) => Engine.getPieceValue(a.type) <= Engine.getPieceValue(b.type) ? a : b);
+
+      // Can the hero already reach a ★ piece this turn?
       const heroMoves = getMoves(hero.x, hero.y, board, enPassantTarget);
       const canAlreadyTakeStar = heroMoves.some(([mx, my]) => {
         const target = pieces.find(p => p.x === mx && p.y === my && !isBlack(p.type));
@@ -498,13 +538,11 @@ const Game = (() => {
       });
 
       if (!canAlreadyTakeStar) {
-        // Condition 3: is the opponent a serious threat?
-        const enemyPieces = pieces.filter(p => isWhite(p.type));
         const isThreatening = enemyPieces.length > 2 ||
           (enemyPieces.length >= 2 &&
            enemyPieces.some(p => p.type === 'q' || p.type === 'r'));
 
-        if (isThreatening && Math.random() < FINETUNE.miracleProb) {
+        if (isThreatening && Math.random() < miracleChance) {
           // Collect all squares currently attacked by enemy pieces
           const enemyAttacked = new Set();
           for (const ep of enemyPieces) {

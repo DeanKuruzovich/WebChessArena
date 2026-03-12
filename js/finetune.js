@@ -6,11 +6,6 @@
 
 const FINETUNE = {
 
-  // ---------------------------------------------------------------------------
-  // Opponent piece spawn probabilities (index = current white-piece count on board).
-  // These are BASE probabilities, scaled by the eval factor below.
-  // ---------------------------------------------------------------------------
-  oppSpawnProbs: [1.00, 0.80, 0.60, 0.40, 0.20],
 
   // ---------------------------------------------------------------------------
   // Piece forming (ghost state before becoming active).
@@ -36,12 +31,22 @@ const FINETUNE = {
   //   eval=-8 → factor 2.0  (player winning  → flood with enemies)
   //   eval=+8 → factor 0.0  → clamped to min (player losing → give breathing room)
   // ---------------------------------------------------------------------------
-  evalSpawnDivisor     : 6,
-  minSpawnFactor       : 0.1,
-  maxSpawnFactor       : 3,
-  spawnFactorScaler      : 1.5,   // base multiplier on the final clamped spawn factor
-  spawnFactorScalerScaler: 1.04,  // multiplies spawnFactorScaler every turn (compounds over time)
+  evalSpawnDivisor     : 8,
+  minSpawnFactor       : 0.3,
+  maxSpawnFactor       : 2.2,
+  //^- based on position
+
+  //v- based on # moves played
+
+  spawnFactorScalerScaler: 1.01,  // multiplies spawnFactorScaler every turn (compounds over time)
   
+  //independent -v
+  spawnFactorScaler      : .9,   // base multiplier on the final clamped spawn factor
+  
+  //based on number of pieces -v
+  oppPieceNumberScaleDownFact: 0.8,
+  maxOppPieces               : 6,
+
 
   // ---------------------------------------------------------------------------
   // Star (convertable piece) probability:
@@ -50,15 +55,25 @@ const FINETUNE = {
   //   eval > 0 (player losing)  → more stars spawned (helps player recover)
   //   eval < 0 (player winning) → fewer stars spawned (player doesn't need help)
   // ---------------------------------------------------------------------------
-  starBaseProb   : 0.28,
+  starBaseProb   : 0.40,
   evalStarDivisor: 8,
-  starPieceScale : 0.1,   // subtract this per extra black piece (1 piece = base, 5 = base-4*scale)
-  starMinProb    : 0.15,
+  starMinProb    : 0.25,
   starMaxProb    : 0.90,
+  //^- based on position
 
-  // Soft max player pieces: no new star pieces spawn while the player has this many or more pieces.
-  // Player can still exceed this by capturing stars that were already on the board at 4 pieces.
+  //independent -v
+  starChanceScaler: 1.1,   // base multiplier on the clamped star probability
+  
+  //v- based on # moves played
+  starChanceScalerScaler: 0.99,  // multiplies starChanceScaler every turn (stars get rarer over time)
+
+  //based on number of pieces -v
   playerPieceSoftMax: 5,
+  
+
+  // Engine bonus value for starred (convertable) pieces.
+  // Added to a piece's value in the engine's evaluation, making it protect starred pieces harder.
+  starValueBonus: 2.2,
 
   // ---------------------------------------------------------------------------
   // Opponent piece type weights.
@@ -66,32 +81,28 @@ const FINETUNE = {
   // Queens are kept very rare.
   // ---------------------------------------------------------------------------
   oppPieceWeights: {
-    p: 16.0,   // pawns  — most common
+    p: 15.0,   // pawns  — most common
     n: 2.5,   // knights
     b: 2.5,   // bishops
     r: 2.0,   // rooks
-    q: 0.3,   // queens  ← very rare
+    q: 0.3,   // queens  
     k: 0.8,   // kings
   },
 
-  // ---------------------------------------------------------------------------
-  // Player starting piece weights (used for initial set selection).
-  // (Higher = more likely to appear in the starting hand.)
-  // ---------------------------------------------------------------------------
-  playerPieceWeights: {
-    P: 4.0,
-    N: 2.0,
-    B: 1.8,
-    R: 1.5,
-    Q: 0.6,
-    K: 1,
+ playerPieceWeights: {
+    P: 3.5,
+    N: 2,
+    B: 2,
+    R: 2,
+    Q: 1,
+    K: 1.8,
   },
 
   // ---------------------------------------------------------------------------
   // Global score scale factor — multiplies every point award (captures,
   // time bonus, promotion).  Result is always Math.round'd to keep integer scores.
   // ---------------------------------------------------------------------------
-  scoreScaleFactor: 1,
+  scoreScaleFactor: 1.5,
 
   // ---------------------------------------------------------------------------
   // Move-time score bonus (piecewise-linear between anchors).
@@ -121,6 +132,7 @@ const FINETUNE = {
   // attack squares each turn.
   // ---------------------------------------------------------------------------
   miracleProb: 0.25,
+  miracleFirstFiveTurns: 0.5,  // miracle probability override for the first 5 turns
 
   // ---------------------------------------------------------------------------
   // Debug HUD toggle:
@@ -157,11 +169,11 @@ const FINETUNE = {
    debugBoard: [
     ['', '', '', '', '', '', '', ''],  
     ['', '', '', '', '', '', '', ''],
-    ['', '', 'R', '', '', '', '', ''],
+    ['', '', '', 'p', '', '', '', ''],
     ['', '', '', '', '', '', '', ''],
-    ['n', '', '', '', 'q', '', '', ''],
-    ['', 'p', 'k', '', '', '', '', ''],
-    ['', '', '', 'P', '', '', '', ''],
+    ['', '', 'Q', 'Q', 'Q', 'Q', '', ''],
+    ['', '', 'Q', 'Q', 'Q', 'Q', 'Q', ''],
+    ['', '', '', '', '', '', '', ''],
     ['', '', '', '', '', '', '', '']
   ],
 

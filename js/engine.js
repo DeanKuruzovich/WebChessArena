@@ -12,7 +12,7 @@ const Engine = (() => {
 
   const MAX_DEPTH = 3;
 
-  const PIECE_VALUES = { p: 1.5, r: 4.79, n: 2.40, b: 3.20, q: 9.29, k: 3.0 };
+  const PIECE_VALUES = { p: 1.5, r: 4.79, n: 2.40, b: 2.80, q: 9.29, k: 3.0 };
 
   // ---------------------------------------------------------------------------
   // Helpers (mirrors Global.gd)
@@ -168,8 +168,9 @@ const Engine = (() => {
     // Public: returns best move for white {from:[x,y], to:[x,y], eval, isEnPassant, isTwoSquarePawn}
     // or null if no moves available
     // -----------------------------------------------------------------------
-    getBestMove(board, awakenessMap, epTarget) {
+    getBestMove(board, awakenessMap, convertableMap, epTarget) {
       if (!epTarget) epTarget = [-1, -1];
+      this._convMap = convertableMap;
       this._mat = this._computeMaterial(board);
       this._undoStrs = [];
 
@@ -336,7 +337,8 @@ const Engine = (() => {
 
       // Normal capture material
       if (toPiece !== '') {
-        const v = getPieceValue(toPiece);
+        let v = getPieceValue(toPiece);
+        if (this._convMap && this._convMap[tx][ty]) v += (FINETUNE.starValueBonus || 0);
         if (isBlack(toPiece)) this._mat += v; else this._mat -= v;
       }
 
@@ -345,7 +347,8 @@ const Engine = (() => {
         epx = tx; epy = fy;
         epCap = board[tx][fy];
         if (epCap !== '') {
-          const v = getPieceValue(epCap);
+          let v = getPieceValue(epCap);
+          if (this._convMap && this._convMap[tx][fy]) v += (FINETUNE.starValueBonus || 0);
           if (isBlack(epCap)) this._mat += v; else this._mat -= v;
         }
         board[tx][fy] = '';
@@ -393,7 +396,8 @@ const Engine = (() => {
 
       // Undo capture material
       if (toPiece !== '') {
-        const v = getPieceValue(toPiece);
+        let v = getPieceValue(toPiece);
+        if (this._convMap && this._convMap[tx][ty]) v += (FINETUNE.starValueBonus || 0);
         if (isBlack(toPiece)) this._mat -= v; else this._mat += v;
       }
 
@@ -401,7 +405,8 @@ const Engine = (() => {
       if (epx !== -1) {
         board[epx][epy] = epCap;
         if (epCap !== '') {
-          const v = getPieceValue(epCap);
+          let v = getPieceValue(epCap);
+          if (this._convMap && this._convMap[epx][epy]) v += (FINETUNE.starValueBonus || 0);
           if (isBlack(epCap)) this._mat -= v; else this._mat += v;
         }
       }
@@ -409,11 +414,13 @@ const Engine = (() => {
 
     _computeMaterial(board) {
       let w = 0, b = 0;
+      const bonus = FINETUNE.starValueBonus || 0;
       for (let i = 0; i < 8; i++)
         for (let j = 0; j < 8; j++) {
           const p = board[i][j];
           if (p !== '') {
-            const v = getPieceValue(p);
+            let v = getPieceValue(p);
+            if (this._convMap && this._convMap[i][j]) v += bonus;
             if (isBlack(p)) b += v; else w += v;
           }
         }
